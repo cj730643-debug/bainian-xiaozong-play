@@ -92,6 +92,7 @@ header{height:75px;display:flex;align-items:center;justify-content:space-between
 .map-avatar{position:absolute;z-index:3;display:grid;place-items:center;width:23px;height:23px;border-radius:50%;border:1px solid #edcf87;background:#283e33;color:#fff2c6;font-size:12px;font-weight:700;transform:translate(-50%,-50%);pointer-events:auto;transition:left .48s linear,top .48s linear}.map-avatar.is-travelling{background:#6a542e}
 </style>
 
+<dialog id="recruit-event" class="town-window" aria-label="招徒名册"></dialog>
 <dialog id="town-window" class="town-window" aria-label="石桥镇"></dialog>
 <main id="app">
 <header><div class="brand"><span class="seal">宗</span> 百年小宗</div><button id="pip" class="gold" disabled>开启画中画</button></header>
@@ -889,7 +890,7 @@ function complete(s,j){
     case 'visitTown':s.townVisit={id:j.id,person:j.people[0]};break;
     case 'recruit':{
       const plan=annualRecruit(s);
-      if(plan){plan.listed=true;log(s,p.name+'带回了第 '+plan.year+' 年的招徒名册。');}
+      if(plan){plan.listed=true;plan.pendingEvent=true;log(s,p.name+'带回了第 '+plan.year+' 年的招徒名册。');}
       break;
     }
     case 'manual':learnManual(p,manuals[j.arg].name,manuals[j.arg].art);break;
@@ -1389,6 +1390,9 @@ function dispatch(s,a){
       const route=travelPlan(s,'returnRoad',ids,'',0);
       delete s.townVisit;beginReturn(s,ids,route);return;
     }
+    case 'defer-recruit':
+      if(s.annualRecruit?.year===year(s))s.annualRecruit.pendingEvent=false;
+      return;
     case 'accept-recruit':{
       if(!s.created||a.token!==year(s))return '招徒名册已过期。';
       const plan=s.annualRecruit,index=a.n;
@@ -1883,6 +1887,17 @@ function townApproachMarkup(){
     +'<p><small>'+esc(spec.reason||routeText(state,spec.route,spec.duration)+' · 2 口粮')+'</small></p>'
     +btn('前往石桥镇','visit-town','data-i="'+chosen+'" class="gold"',spec.reason);
 }
+function refreshRecruitEvent(){
+  const dialog=$('recruit-event'),plan=state.annualRecruit;
+  if(!plan?.pendingEvent||plan.year!==year(state)||!state.townVisit){
+    if(dialog.open)dialog.close();
+    return;
+  }
+  dialog.innerHTML='<div class="row town-header"><h2>访徒归来</h2>'
+    +btn('稍后决定','defer-recruit')+'</div><p>招徒名册已送到。可以逐个收徒，名额和名单全年有效。</p>'
+    +recruitmentMarkup(state).replace(' id="town-recruitment"','');
+  if(!dialog.open)dialog.showModal();
+}
 function refreshTownWindow(){
   const dialog=$('town-window'),visit=state.townVisit;
   if(!visit){if(dialog.open)dialog.close();return;}
@@ -2366,6 +2381,7 @@ function render(){
   showView(activeView);
   if(own(assignmentPages,activeView))$('assignments').innerHTML=assignmentMarkup();
   refreshTownWindow();
+  refreshRecruitEvent();
   $('event').hidden=!state.eventQueue.length;
   $('event').innerHTML='<h2>待处理 · '+state.eventQueue.length+'</h2>'+state.eventQueue.map(e=>'<article class="pending">'+eventCard(e)+'</article>').join('');
   $('battle').innerHTML=battleMarkup();$('battle').hidden=!$('battle').innerHTML;
@@ -2545,6 +2561,7 @@ function change(e){
   if(reserve)sync({kind:'reserve',value:reserve,n:Number(el.value)});
   if(gear)sync({kind:'gear',slot:gear,i:Number(i),value:el.value});
 }
+$('recruit-event').addEventListener('cancel',e=>{e.preventDefault();sync({kind:'defer-recruit'});});
 document.addEventListener('click',handle);
 document.addEventListener('change',change);
 function mountMini(root){
