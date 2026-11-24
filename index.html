@@ -460,12 +460,44 @@ const fatigueOf=p=>p.fatigue??0;
 const nightAt=time=>{const h=Math.floor(time/scheduleHour)%24;return h<6||h>=22;};
 const restingForFatigue=(s,p)=>p.fatigueRest||fatigueOf(p)>=80
   ||(!p.schedulePaused&&scheduleMode(s,p)==='free'&&fatigueOf(p)>=60);
-const restRate=time=>nightAt(time)?15:10;
+const talents={
+  herb:['识草','种药熟练度获取 +50%',1.5],
+  flame:['善控火','炼丹熟练度获取 +50%',1.5],
+  ore:['识矿','采矿熟练度获取 +50%',1.5],
+  memory:['过目不忘','功法学习速度 +25%',1.25],
+  focus:['易入定','静修修为获取 +20%',1.2],
+  diligent:['勤作','种药、炼丹、采集、施工疲劳增长 −20%',0.8],
+  sleeper:['沾枕即眠','夜间睡眠疲劳恢复速度 +30%',1.3],
+  sturdy:['筋骨结实','物防 +20%',1.2],
+  clear:['灵台清明','法防 +20%',1.2],
+  swift:['步履轻捷','战斗速度 +15%',1.15],
+  tired:['易疲','种药、炼丹、采集、施工疲劳增长 +25%',1.25],
+  lightSleep:['浅眠','夜间睡眠疲劳恢复速度 −25%',0.75],
+  restless:['难入定','静修修为获取 −20%',0.8],
+  frail:['筋骨单薄','物防 −20%',0.8],
+  unstable:['灵息不稳','术法灵力消耗 +20%',1.2]
+};
+const talentFactor=(p,...ids)=>ids.reduce((factor,id)=>factor*(p.talents?.includes(id)?talents[id][2]:1),1);
+function rollTalents(random=Math.random){
+  const ids=Object.keys(talents), result=[];
+  if(random()<0.65)result.push(ids[Math.floor(random()*10)]);
+  if(random()<0.30){
+    const opposites={diligent:'tired',sleeper:'lightSleep',focus:'restless',sturdy:'frail'};
+    const pool=ids.slice(10).filter(id=>id!==opposites[result[0]]);
+    result.push(pool[Math.floor(random()*pool.length)]);
+  }
+  return result;
+}
+function talentMarkup(p){
+  const entries=(p.talents??[]).filter(id=>own(talents,id));
+  return entries.length?entries.map(id=>'<small><b>'+talents[id][0]+'</b> · '+talents[id][1]+'</small>').join(''):'<small>暂无天赋</small>';
+}
+const restRate=(time,p)=>nightAt(time)?15*talentFactor(p,'sleeper','lightSleep'):10;
 function fatigueRecovery(s,p){
   let time=s.time, remaining=Math.max(0,fatigueOf(p)-30);
   while(remaining>1e-9){
     const boundary=(Math.floor(time/scheduleHour)+1)*scheduleHour;
-    const rate=restRate(time), duration=remaining/rate*scheduleHour;
+    const rate=restRate(time,p), duration=remaining/rate*scheduleHour;
     if(duration<=boundary-time)return Math.ceil(time+duration);
     remaining-=(boundary-time)/scheduleHour*rate;
     time=boundary;
@@ -480,9 +512,10 @@ function advanceFatigue(s,time){
     const rate=j?(j.end===null?0:j.type==='patrol'||j.type==='harvest'&&(j.arg==='mine'||j.arg==='mist5')?10
       :['harvest','develop','repair','fortify'].includes(j.type)?7
       :study.has(j.type)||['manual','teach','transmit','apprentice','winter'].includes(j.type)?3:5)
-      :forced||p.rest>s.time||!p.schedulePaused&&scheduleMode(s,p)==='rest'?-restRate(s.time):-4;
+      :forced||p.rest>s.time||!p.schedulePaused&&scheduleMode(s,p)==='rest'?-restRate(s.time,p):-4;
+    const workFactor=j&&['farm','brew','heal','qi','forge','harvest','hill','canal','seek','develop','repair','fortify','clearRocks'].includes(j.type)?talentFactor(p,'diligent','tired'):1;
     const before=fatigueOf(p);
-    p.fatigue=Math.max(0,Math.min(100,before+hours*rate));
+    p.fatigue=Math.max(0,Math.min(100,before+hours*rate*workFactor));
     const resting=p.fatigue>=80-1e-9||forced&&p.fatigue>30+1e-9;
     if(resting!==!!p.fatigueRest||before<60&&p.fatigue>=60||before>=60&&p.fatigue<60)changed=true;
     p.fatigueRest=resting;
@@ -552,7 +585,7 @@ function annualRecruit(s){
     let name=base;
     for(let suffix=2;names.has(name);suffix++)name=base+'·'+suffix;
     names.add(name);
-    return {name,gift:rollRecruitRoots(),stats,age,intro,trade,experience};
+    return {name,gift:rollRecruitRoots(),stats,age,intro,trade,experience,talents:rollTalents()};
   });
   return s.annualRecruit={year:year(s),limit,candidates,chosen:[],listed:false};
 }
@@ -644,7 +677,7 @@ function practiceTrade(s,p,id,amount=1){
   const count=tradeCount(p,id);
   if(count>=20)return;
   p.trades??={};
-  p.trades[id]=Math.min(20,Math.round((count+amount*learningRate(p))*100)/100);
+  p.trades[id]=Math.min(20,Math.round((count+amount*learningRate(p)*talentFactor(p,{farming:'herb',alchemy:'flame',mining:'ore'}[id]))*100)/100);
   const level=tradeLevel(p.trades[id]);
   if(level!==tradeLevel(count))log(s,p.name+'的'+trades[id][0]+'达到'+tradeRanks[level]+'。');
 }
@@ -802,7 +835,10 @@ function jobSpec(s,type,ids,arg='',pack=0){
   }
   const specialty=tradeFor(type,arg);
   if(['alchemy','building','forging'].includes(specialty))duration=Number((duration*(1-0.1*tradeLevel(tradeCount(p,specialty)))).toFixed(2));
-  if(['manual','read','learn','vine','transmit'].includes(type))duration=Math.max(1/60,Math.round(duration*60/learningRate(type==='transmit'?members[1]:p))/60);
+  if(['manual','read','learn','vine','transmit'].includes(type)){
+    const learner=type==='transmit'?members[1]:p;
+    duration=Math.max(1/60,Math.round(duration*60/(learningRate(learner)*talentFactor(learner,'memory')))/60);
+  }
   const shortage=missing(s,cost,useReserve);
   const route=travelPlan(s,type,ids,arg,duration*minute);
   return {label,duration,cost,useReserve,arg,route,reason:shortage};
@@ -887,7 +923,7 @@ function complete(s,j){
       const base=cultivation(p), qi=j.qiBonus??0;
       let gain=qi===3?base+qi:Math.round(base*(1+qi));
       if(!p.rank&&s.route==='borrow'&&s.flags.restored&&s.uses<5){s.uses++;gain+=2;}
-      const previous=p.points;addXp(p,gain);
+      const previous=p.points;addXp(p,Math.max(1,Math.round(gain*talentFactor(p,'focus','restless'))));
       if(p.points>previous)log(s,p.name+'晋升至'+rankName(p)+'，获得 '+(p.points-previous)+' 点五维。');
       p.mastery[p.technique]++;
       s.studyRounds++;
@@ -1181,17 +1217,18 @@ function combatStats(p){
   const realm=p.rank?1.25:1;
   return {
     attackRange:p.weapon==='bow'?3:1,
-    speed:Number((speed*(mastered(p,manuals.cloudstep.name,6)?1.6:mastered(p,manuals.cloudstep.name)?1.3:1)).toFixed(2)),hp,maxHp:hp,
+    speed:Number((speed*(mastered(p,manuals.cloudstep.name,6)?1.6:mastered(p,manuals.cloudstep.name)?1.3:1)*talentFactor(p,'swift')).toFixed(2)),hp,maxHp:hp,
     mp:Math.round((10+2*spirit)*(p.rank?1.5:1)*(water?1.1:stream?1.2:1)*(p.charm==='jade'?1.3:1)),
     physicalAttack:Math.round(((p.weapon==='iron'?15:p.weapon==='bow'?10:12)+body*0.5)*realm*(mastered(p,manuals.metal.name)?1.15:1)),
-    physicalDefense:Math.round(body*realm*(earth?1.35:starter?1.2:1)),
+    physicalDefense:Math.round(body*realm*(earth?1.35:starter?1.2:1)*talentFactor(p,'sturdy','frail')),
     spellAttack:Math.round((10+spirit*0.5)*realm*(mastered(p,manuals.fire.name)?1.2:1)),
-    spellDefense:Math.round(spirit*realm*(water?1.25:stream?1.3:1))
+    spellDefense:Math.round(spirit*realm*(water?1.25:stream?1.3:1)*talentFactor(p,'clear'))
   };
 }
 const artCosts={guard:5,stone:6,stream:5,vine:5,pierce:5,recover:5,burn:5};
 function artCost(p,art){
-  return artCosts[art]-(art==='stone'&&mastered(p,manuals.earth.name,6)||art==='vine'&&mastered(p,manuals.wood.name,6)?1:0);
+  const cost=artCosts[art]-(art==='stone'&&mastered(p,manuals.earth.name,6)||art==='vine'&&mastered(p,manuals.wood.name,6)?1:0);
+  return Math.ceil(cost*talentFactor(p,'unstable')-1e-9);
 }
 const damageAfterDefense=(power,defense)=>Math.max(1,Math.round(power*50/(50+defense)));
 function hitEnemy(b,power,kind='physical'){
@@ -1443,6 +1480,7 @@ function dispatch(s,a){
       if(reason)return reason;
       const candidate=plan.candidates[index];
       const person=makePerson(candidate.name,candidate.gift,candidate.stats,10,candidate.age);
+      person.talents=[...(candidate.talents??[])];
       if(candidate.trade)person.trades={[candidate.trade]:candidate.experience};
       spend(s,recruitCost);
       plan.chosen.push(index);
@@ -1884,7 +1922,7 @@ function recruitmentMarkup(s){
     const accepted=plan.chosen.includes(index),reason=recruitChoiceReason(s,plan,index);
     return '<article class="pending"><div class="row"><b>'+esc(c.name)+'</b><span>'+esc(c.gift)+'</span></div>'
       +'<small>'+esc(c.intro)+(c.trade?' · '+trades[c.trade][0]+'经验 '+c.experience:'')+'</small>'
-      +'<small>'+c.stats.map((n,i)=>attributes[i]+' '+n).join(' · ')+'</small>'
+      +talentMarkup(c)+'<small>'+c.stats.map((n,i)=>attributes[i]+' '+n).join(' · ')+'</small>'
       +(accepted?'<small>已入门</small>':btn('收为弟子','accept-recruit','data-token="'+plan.year+'" data-n="'+index+'"',reason)
         +(reason?'<small>'+esc(reason)+'</small>':''))+'</article>';
   }).join('')+'</section>';
@@ -2182,7 +2220,7 @@ function peopleMarkup(){
     +(j?.repeat?btn('本轮完成后让位','yield','data-token="'+j.id+'"'):idle?btn('安排差事','focus','data-i="'+i+'" class="gold"'):'')+'</div>'
     +'<div class="rpg-vitals">'+vitals+'</div>'
     +(!p.rank?'<div class="character-progress"><small>修为 '+p.xp+' / 100</small><div class="meter"><span style="width:'+p.xp+'%"></span></div></div>':'')+'</div></div>'
-    +dutyMarkup(p,i)+'<section class="rpg-card"><h4>差事熟练度</h4>'
+    +'<section class="rpg-card"><h4>天赋</h4>'+talentMarkup(p)+'</section>'+dutyMarkup(p,i)+'<section class="rpg-card"><h4>差事熟练度</h4>'
     +Object.entries(trades).map(([id,[label,effect]])=>{
       const count=tradeCount(p,id), level=tradeLevel(count);
       return '<div class="row"><b>'+label+'</b><span>'+tradeRanks[level]
