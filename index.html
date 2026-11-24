@@ -299,7 +299,7 @@ const tasks = {
   hill:['后山采药',3],seek:['寻筑基辅药',3],patrol:['后山巡山',3],rain:['雨季巡山',3],
   ape:['驱离山猿',3],trail:['巡查獾道',3],outer:['查荒庙外围',2],town:['石桥镇查井',2],temple:['无灯荒庙下井',3],
   brew:['炼筑基丹',2],break:['筑基冲关',1],restore:['借泉复阵',2],seal:['封住残阵',2],
-  ditch:['清理旧渠',2],canal:['沿渠采药',3],repair:['主持修缮',3],recruit:['石桥镇收徒',3],
+  ditch:['清理旧渠',2],canal:['沿渠采药',3],repair:['主持修缮',3],recruit:['赴石桥镇访徒',3],
   explore:['勘查迷雾',2],clearRocks:['清理落石',2],forge:['打造装备',3],read:['参悟《青崖引泉诀》',2],vine:['学缠藤术',1],heal:['炼疗伤丹',1],qi:['炼聚气丹',1],teach:['传授功法心得',1],
   trade:['石桥镇换粮',2],winter:['围炉讲法',1]
 };
@@ -447,12 +447,58 @@ function settleSupply(s){
   log(s,delivered?'石桥镇供药已交付，获得 3 灵石与 1 声望。':'石桥镇供药缺货，本季无报酬。');
   if(!contract.remaining)log(s,'石桥镇供药契约到期，可在坊市续签。');
 }
+const recruitmentTiers=[
+  [1,0,3,1],[3,2,5,2],[6,4,7,3],[10,5,9,4]
+];
+const recruitProfiles=[
+  ['顾芦','木、水双灵根',[4,5,4,5,6],18,'山间采药学徒','farming',3],
+  ['陶川','金、土双灵根',[5,4,7,5,4],20,'跟石匠做过活','mining',2],
+  ['许照','火灵根',[5,7,4,5,6],19,'在药铺帮过工','alchemy',2],
+  ['林溪','水灵根',[6,5,4,5,7],18,'随渔户长大'],
+  ['裴棠','木灵根',[5,6,4,6,5],21,'常到暮露药谷采草','farming',3,'mist3'],
+  ['贺石','土灵根',[5,5,7,4,5],22,'熟悉碎星矿脉','mining',3,'mist5'],
+  ['沈星','金灵根',[6,6,5,7,4],19,'练过山路步法'],
+  ['桑宁','木、土双灵根',[5,6,6,4,5],20,'会照料药苗','farming',2],
+  ['程焰','火、土双灵根',[4,7,6,4,5],21,'曾替丹师看炉','alchemy',3]
+];
+const recruitCost={food:3};
+function recruitUnlock(s){
+  if(!s.built.room)return '先增建一处厢房。';
+  if(townRep(s)<1)return '需要石桥镇声望 1。';
+  return '';
+}
+function annualRecruit(s){
+  if(s.annualRecruit?.year===year(s))return s.annualRecruit;
+  const explored=fogTiles.filter(id=>s.flags['explored_'+id]).length;
+  const tier=recruitmentTiers.filter(([rep,tiles])=>townRep(s)>=rep&&explored>=tiles).at(-1);
+  if(!tier||recruitUnlock(s))return null;
+  const [, ,count,limit]=tier;
+  const pool=recruitProfiles.filter(profile=>!profile[7]||s.flags['explored_'+profile[7]]);
+  const offset=(year(s)-1)%pool.length;
+  const profiles=[...pool.slice(offset),...pool.slice(0,offset)].slice(0,count);
+  const names=new Set(s.people.map(p=>p.name));
+  const candidates=profiles.map(([base,gift,stats,age,intro,trade,experience])=>{
+    let name=base;
+    for(let suffix=2;names.has(name);suffix++)name=base+'·'+suffix;
+    names.add(name);
+    return {name,gift,stats,age,intro,trade,experience};
+  });
+  return s.annualRecruit={year:year(s),limit,candidates,chosen:[],listed:false};
+}
+function recruitChoiceReason(s,plan,index){
+  if(!plan?.listed||plan.year!==year(s))return '请先派人带回今年的名册。';
+  if(!plan.candidates[index]||plan.chosen.includes(index))return '该候选人不可招收。';
+  if(plan.chosen.length>=plan.limit)return '今年的招徒名额已用完。';
+  if(s.people.length>=capacity(s))return '厢房没有空位。';
+  return missing(s,recruitCost);
+}
 function advanceClock(s,time){
   const before=Math.floor(s.time/seasonLength);
   const changed=advanceFatigue(s,time);
   const after=Math.floor(time/seasonLength);
   if(before===after)return changed;
   settleSupply(s);
+  if(Math.floor(before/4)!==Math.floor(after/4))annualRecruit(s);
   const due=seasonalFood(s);
   const paid=Math.min(s.stock.food,due);
   s.stock.food-=paid;
@@ -648,7 +694,14 @@ function jobSpec(s,type,ids,arg='',pack=0){
       const [name,minutes,materials]=repairs[arg];
       label=name;duration=minutes;cost=materials;break;
     }
-    case 'recruit': if(!s.built.room||s.people.length>=capacity(s)||current('recruit')||s.eventQueue.some(e=>e.id==='recruit'))return fail('收徒需要修好厢房、留有床位，且无待处理招徒。');break;
+    case 'recruit': {
+      const reason=recruitUnlock(s);
+      if(reason)return fail(reason);
+      if(current('recruit'))return fail('已有弟子前往石桥镇。');
+      if(s.eventQueue.some(e=>e.id==='recruit'))return fail('请先处理事件页里的旧招徒名单。');
+      if(s.annualRecruit?.year===year(s)&&s.annualRecruit.listed)return fail('今年的名册已带回。');
+      break;
+    }
     case 'trade': {
       const autumn=season(s)===2&&s.seasonClaims.autumn!==year(s);
       if(current('trade'))return fail('已有一人前往石桥镇交易。');
@@ -783,7 +836,11 @@ function complete(s,j){
     case 'canal':s.stock.herbs+=4;break;
     case 'forge':s.gear[j.arg]++;break;
     case 'repair':s.built[j.arg]=j.arg==='farm'?true:(Number(s.built[j.arg])||0)+1;break;
-    case 'recruit':queue(s,'recruit',j.people,null,true);break;
+    case 'recruit':{
+      const plan=annualRecruit(s);
+      if(plan){plan.listed=true;log(s,p.name+'带回了第 '+plan.year+' 年的招徒名册。');}
+      break;
+    }
     case 'manual':learnManual(p,manuals[j.arg].name,manuals[j.arg].art);break;
     case 'learn':case 'vine':{
       const art=j.type==='learn'?'stone':'vine';
@@ -1170,6 +1227,21 @@ function dispatch(s,a){
       if(!p?.duty)break;
       p.dutyPaused=false;return;
     }
+    case 'accept-recruit':{
+      if(!s.created||a.token!==year(s))return '招徒名册已过期。';
+      const plan=s.annualRecruit,index=a.n;
+      if(!Number.isInteger(index))return '请选择候选人。';
+      const reason=recruitChoiceReason(s,plan,index);
+      if(reason)return reason;
+      const candidate=plan.candidates[index];
+      const person=makePerson(candidate.name,candidate.gift,candidate.stats,10,candidate.age);
+      if(candidate.trade)person.trades={[candidate.trade]:candidate.experience};
+      spend(s,recruitCost);
+      plan.chosen.push(index);
+      s.people.push(person);
+      log(s,person.name+'通过石桥镇招徒入门。');
+      return;
+    }
     case 'sign-supply':
       if(!s.created)return '请先接掌宗门。';
       if(s.supplyContract?.remaining)return '已有供药契约履行中。';
@@ -1290,6 +1362,7 @@ function apply(current,command,wall){
   for(const manual of Object.values(manuals))if(!next.archive.includes(manual.name))next.archive.push(manual.name);
   let changed=tick(next,wall);
   const message=command?dispatch(next,command):'';
+  if(next.created)annualRecruit(next);
   if(command&&!message&&next.created)changed=assignDuties(next)||changed;
   if(command&&!message){
     if(command.kind==='create')next.wall=Math.max(next.wall,wall);
@@ -1420,7 +1493,7 @@ function taskChoices(){
     if(id==='canal')return s.ditch===2;
     if(id==='read')return f.temple;
     if(id==='ape')return f.vine;
-    if(id==='recruit')return s.built.room;
+    if(id==='recruit')return !(s.annualRecruit?.year===year(s)&&s.annualRecruit.listed);
     if(id==='rain')return season(s)===1;
     if(id==='winter')return season(s)===3;
     if(id==='teach')return !!f.first&&!s.legacy;
@@ -1471,6 +1544,27 @@ function marketMarkup(){
     +'<p>签约两季。每次换季自动交付 8 份未预留的普通药材，获得 3 灵石和 1 点声望。缺货当季无报酬。</p>'
     +'<p>'+supplyStatus(state)+'</p>'+btn(state.supplyContract?'续签两季':'签订两季','sign-supply','',
       state.supplyContract?.remaining?'契约履行中':'')+'</section>';
+}
+function recruitmentMarkup(s){
+  const plan=s.annualRecruit?.year===year(s)?s.annualRecruit:null;
+  let html='<section class="task-form"><h3>年度招徒</h3>';
+  const locked=recruitUnlock(s);
+  if(locked)return html+'<p class="muted">'+locked+'</p></section>';
+  if(!plan?.listed){
+    const visit=s.jobs.find(j=>j.type==='recruit');
+    return html+'<p>今年名额 '+(plan?.limit??0)+' · '+(visit?'访徒中 · '+clock(visit.end)
+      :'选择下方「赴石桥镇访徒」，派一名弟子出发。')+'</p></section>';
+  }
+  html+='<p>第 '+plan.year+' 年 · 已收 '+plan.chosen.length+'/'+plan.limit
+    +' · 空床 '+Math.max(0,capacity(s)-s.people.length)+'</p><small>每人安家费 3 口粮，入门后每季多支出 2 口粮。</small>';
+  return html+plan.candidates.map((c,index)=>{
+    const accepted=plan.chosen.includes(index),reason=recruitChoiceReason(s,plan,index);
+    return '<article class="pending"><div class="row"><b>'+esc(c.name)+'</b><span>'+esc(c.gift)+'</span></div>'
+      +'<small>'+esc(c.intro)+(c.trade?' · '+trades[c.trade][0]+'经验 '+c.experience:'')+'</small>'
+      +'<small>'+c.stats.map((n,i)=>attributes[i]+' '+n).join(' · ')+'</small>'
+      +(accepted?'<small>已入门</small>':btn('收为弟子','accept-recruit','data-token="'+plan.year+'" data-n="'+index+'"',reason)
+        +(reason?'<small>'+esc(reason)+'</small>':''))+'</article>';
+  }).join('')+'</section>';
 }
 function commissionsMarkup(){
   return '<section class="task-form"><h3>石桥镇委托</h3><p>当前声望 <b>'+townRep(state)+'</b></p>'
@@ -1540,7 +1634,8 @@ function assignmentPanel(){
       +'<b>在库 '+state.gear[id]+'</b></div>').join('')+'</section>';
   }
   if(selectedBuilding==='quarry'&&state.flags.quarryRocks)html+='<p class="accent">! 山道落石</p><p>落石堵住了采石道。派弟子清理可恢复作业，带回 2 石料。</p>';
-  if(selectedBuilding==='town')html+=marketMarkup()+commissionsMarkup();
+  const townServices=selectedBuilding==='town'?marketMarkup()+commissionsMarkup():'';
+  if(selectedBuilding==='town')html+=recruitmentMarkup(state);
   if(selectedBuilding==='farm')html+='<p class="muted">种药位 '+farmOccupied(state)+' / '+farmCapacity(state)+'。修缮后可反复扩建。</p>';
   if(selectedBuilding==='furnace')html+=productionMarkup(state)+'<p class="muted">丹炉使用 '+furnaceOccupied(state)+' / '+furnaceCapacity(state)+'。每增建一座，可同时多炼一炉。</p>';
   if(selectedBuilding==='study')html+='<p class="muted">静室使用 '+studyOccupied(state)+' / '+studyCapacity(state)+' 间。每建一间增加 1 个修行席位。</p>';
@@ -1557,7 +1652,7 @@ function assignmentPanel(){
   if(selectedBuilding==='water')html+=waterContract();
   if(!choices.length){
     const empty={library:'取得荒庙残卷、培养筑基修士或入冬后，可在此参悟、授徒或讲法。',gate:'厢房已修好，可前往石桥镇收徒。',temple:'荒庙已经勘查完毕。',water:'查清枯井和荒庙后，在这里处置旧阵。'};
-    return html+'<p class="muted">'+(empty[selectedBuilding]??'当前没有新的操作。')+'</p></div>';
+    return html+'<p class="muted">'+(empty[selectedBuilding]??'当前没有新的操作。')+'</p></div>'+townServices;
   }
   const [type,arg='']=assignment.task.split('.');
   if(!selectedPersonExplicitly){
@@ -1585,7 +1680,7 @@ function assignmentPanel(){
     +(bag?'<label>携带疗伤丹<select data-field="pack">'+[0,1,2].map(n=>option(n,n,Number(assignment.pack)===n)).join('')+'</select></label>':'')
     +(repeat?'<label class="check"><input type="checkbox" data-field="repeat" '+(assignment.repeat?'checked':'')+'> 自动重复</label>':'')
     +'</div><div class="row"><small>'+esc(spec.reason||[spec.duration+' 分钟',costText(spec.cost)].filter(Boolean).join(' · '))+'</small>'
-    +btn('开始'+taskLabel(assignment.task),'assign','class="gold"',spec.reason)+'</div></div>';
+    +btn('开始'+taskLabel(assignment.task),'assign','class="gold"',spec.reason)+'</div></div>'+townServices;
 }
 function actorStatus(p,i){
   const fatigue=' · 疲劳 <span data-fatigue="'+i+'">'+Math.floor(fatigueOf(p))+'</span>/100';
