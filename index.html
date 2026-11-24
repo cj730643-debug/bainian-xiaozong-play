@@ -231,17 +231,17 @@ const scheduleMode=(s,p)=>p.schedule?.[gameHour(s)]??'duty';
 const scheduleTemplate=p=>Array.from({length:24},(_,h)=>h<6||h>=22?'rest':h<8?'study':h<18&&scheduledWork[p.duty]&&!p.dutyPaused?p.duty:'free');
 const seasonLength = 15 * minute;
 const offlineCap = 240 * minute;
-const attributes = ['根骨','悟性','体魄','身法','神识','交涉'];
+const attributes = ['根骨','悟性','体魄','身法','神识'];
 const seasons = ['春','夏','秋','冬'];
 const resources = {food:'口粮',herbs:'普通药材',stone:'灵石',main:'筑基主药',aux:'筑基辅药',pill:'筑基丹',heal:'疗伤丹',qi:'聚气丹',wood:'木材',masonry:'石料'};
 const arts = {guard:'护身诀',stone:'飞石术',vine:'缠藤术',stream:'引流护行',pierce:'破甲剑',recover:'回息术',burn:'燃火术'};
 const elements=['金','木','水','火','土'];
 const manuals={
-  metal:{name:'《庚金剑诀》',element:'金',art:'pierce',bonus:'持剑普攻 +1',master:'破甲剑削盾 12'},
+  metal:{name:'《庚金剑诀》',element:'金',art:'pierce',bonus:'物攻 +2',master:'破甲剑削盾 12'},
   wood:{name:'《青藤养息诀》',element:'木',art:'vine',bonus:'药圃每轮 +1 普通药材',master:'缠藤术消耗 4 灵力'},
-  water:{name:'《清泉回息诀》',element:'水',art:'recover',bonus:'灵力上限 +2',master:'回息术回复 22 气血'},
-  fire:{name:'《赤炉行火诀》',element:'火',art:'burn',bonus:'燃火术初次伤害 8',master:'燃烧每轮伤害 5'},
-  earth:{name:'《厚土守元诀》',element:'土',art:'stone',bonus:'气血上限 +8',master:'飞石术消耗 5 灵力'}
+  water:{name:'《清泉回息诀》',element:'水',art:'recover',bonus:'灵力上限 +2、法防 +3',master:'回息术回复 22 气血'},
+  fire:{name:'《赤炉行火诀》',element:'火',art:'burn',bonus:'法攻 +3',master:'燃烧每轮伤害 5'},
+  earth:{name:'《厚土守元诀》',element:'土',art:'stone',bonus:'气血上限 +8、物防 +4',master:'飞石术消耗 5 灵力'}
 };
 const starterManual='《青崖吐纳法》', streamManual='《青崖引泉诀》';
 const roots=p=>elements.filter(element=>p.gift?.includes(element));
@@ -257,7 +257,7 @@ function learnManual(p,name,art){
   if(!p.known.includes(art))p.known.push(art);
 };
 const forgeRecipes={
-  iron:{duration:3,cost:{wood:2,masonry:2,stone:2},effect:'基础普攻 15'},
+  iron:{duration:3,cost:{wood:2,masonry:2,stone:2},effect:'武器基础物攻 15'},
   heart:{duration:2,cost:{wood:2,masonry:1,stone:1},effect:'每场首次受击少扣 8 气血'},
   jade:{duration:3,cost:{masonry:3,stone:2},effect:'灵力上限 +6'}
 };
@@ -326,7 +326,7 @@ const legacyKey = 'bainian-xiaozong-v1';
 const key = 'bainian-xiaozong-chapter1';
 const own = (obj, key) => Object.hasOwn(obj,key);
 const makePerson = (name,gift,stats,xp=0,age=17) => ({
-  name,gift,stats,xp,age,rank:false,points:0,rest:0,known:['guard'],loadout:['guard'],
+  name,gift,stats:stats.slice(0,attributes.length),xp,age,rank:false,points:0,rest:0,known:['guard'],loadout:['guard'],
   technique:'《青崖吐纳法》',mastery:{'《青崖吐纳法》':0},weapon:'wood',charm:''
 });
 const shen = () => makePerson('沈砚','金灵根',[7,6,5,4,4,3],20,21);
@@ -491,7 +491,7 @@ function rankName(p){
 function create(s,name,stats,element='金'){
   if(!elements.includes(element))return '请选择有效的灵根。';
   const clean=String(name??'').trim().slice(0,16);
-  if(s.created||!clean||stats.length!==6||stats.some(n=>!Number.isInteger(n)||n<3||n>8)||stats.reduce((a,b)=>a+b,0)!==36)return '名字和六维尚未填写完整。';
+  if(s.created||!clean||stats.length!==5||stats.some(n=>!Number.isInteger(n)||n<3)||stats.reduce((a,b)=>a+b,0)!==33)return '名字和五维尚未填写完整。';
   s.leader=s.people.length;
   s.people.push(makePerson(clean,element+'灵根',stats,80,45));
   s.created=true;
@@ -510,12 +510,13 @@ function tradeFor(type,arg){
 const tradeCount=(p,id)=>p.trades?.[id]??0;
 const tradeLevel=count=>count>=20?2:count>=5?1:0;
 const tradeRanks=['入门','熟练','精通'];
+const learningRate=p=>1+Math.max(0,p.stats[1]-5)*0.05;
 function practiceTrade(s,p,id,amount=1){
   if(!id)return;
   const count=tradeCount(p,id);
   if(count>=20)return;
   p.trades??={};
-  p.trades[id]=Math.min(20,count+amount);
+  p.trades[id]=Math.min(20,Math.round((count+amount*learningRate(p))*100)/100);
   const level=tradeLevel(p.trades[id]);
   if(level!==tradeLevel(count))log(s,p.name+'的'+trades[id][0]+'达到'+tradeRanks[level]+'。');
 }
@@ -659,6 +660,7 @@ function jobSpec(s,type,ids,arg='',pack=0){
     case 'teach': if(!p.rank||members[1].rank||s.legacy)return fail('授徒需要一名筑基修士和一名炼气后辈，限一次。');break;
   }
   if(tradeFor(type,arg)==='alchemy')duration=Number((duration*(1-0.1*tradeLevel(tradeCount(p,'alchemy')))).toFixed(2));
+  if(['manual','read','learn','vine','transmit'].includes(type))duration=Math.max(1/60,Math.round(duration*60/learningRate(type==='transmit'?members[1]:p))/60);
   const shortage=missing(s,cost,useReserve);
   return {label,duration,cost,useReserve,arg,reason:shortage};
 }
@@ -739,7 +741,7 @@ function complete(s,j){
       let gain=cultivation(p)+(j.qiBonus??0);
       if(!p.rank&&s.route==='borrow'&&s.flags.restored&&s.uses<5){s.uses++;gain+=2;}
       const previous=p.points;addXp(p,gain);
-      if(p.points>previous)log(s,p.name+'晋升至'+rankName(p)+'，获得 '+(p.points-previous)+' 点六维。');
+      if(p.points>previous)log(s,p.name+'晋升至'+rankName(p)+'，获得 '+(p.points-previous)+' 点五维。');
       p.mastery[p.technique]++;
       s.studyRounds++;
       if(s.studyRounds>=1&&!p.rank)queue(s,'echo',j.people);
@@ -967,25 +969,32 @@ function chooseRoute(s,route){
 }
 const enemies = {
   beast:{name:'岩背獾',hp:100,speed:5,hit:14,heavy:32,pounces:false,brief:'抓挠 14 · 每第三轮蓄力重击 32'},
-  gateWolf:{name:'青崖灰狼',hp:80,speed:5,hit:12,heavy:25,pounces:false,brief:'每第三轮蓄力重击。加固山门后，围栏可削弱妖兽 20 气血。'},
-  ape:{name:'白尾山猿',hp:72,speed:5,hit:10,heavy:20,pounces:true,brief:'抓挠 10 · 开场护盾 12 · 每第二轮尝试扑向后排，伤害 20'}
+  gateWolf:{name:'青崖灰狼',hp:80,physicalDefense:5,spellDefense:2,speed:5,hit:12,heavy:25,pounces:false,brief:'每第三轮蓄力重击。加固山门后，围栏可削弱妖兽 20 气血。'},
+  ape:{name:'白尾山猿',hp:72,physicalDefense:8,spellDefense:4,spellHit:true,speed:5,hit:10,heavy:20,pounces:true,brief:'妖术 10（法术） · 开场护盾 12 · 每第二轮尝试扑向后排，伤害 20'}
 };
 function combatStats(p){
   const [,,body,speed,spirit]=p.stats;
   const hp=Math.round((60+body*8)*(p.rank?1.4:1))+(mastered(p,manuals.earth.name)?8:0);
+  const realm=p.rank?1.25:1;
   return {
     speed,hp,maxHp:hp,
     mp:Math.round((10+2*spirit)*(p.rank?1.5:1))+(p.charm==='jade'?6:0)+(mastered(p,manuals.water.name)?2:0)+(mastered(p,streamManual)?4:0),
-    dmg:Math.round((p.weapon==='iron'?15:12)*(p.rank?1.25:1))+(mastered(p,manuals.metal.name)?1:0)
+    physicalAttack:Math.round(((p.weapon==='iron'?15:12)+body*0.5)*realm)+(mastered(p,manuals.metal.name)?2:0),
+    physicalDefense:Math.round(body*realm)+(mastered(p,manuals.earth.name)?4:0),
+    spellAttack:Math.round((10+spirit*0.5)*realm)+(mastered(p,manuals.fire.name)?3:0),
+    spellDefense:Math.round(spirit*realm)+(mastered(p,manuals.water.name)?3:0)
   };
 }
 const artCosts={guard:5,stone:6,stream:5,vine:5,pierce:5,recover:5,burn:5};
 function artCost(p,art){
   return artCosts[art]-(art==='stone'&&mastered(p,manuals.earth.name,6)||art==='vine'&&mastered(p,manuals.wood.name,6)?1:0);
 }
-function hitEnemy(b,damage){
+const damageAfterDefense=(power,defense)=>Math.max(1,Math.round(power*50/(50+defense)));
+function hitEnemy(b,power,kind='physical'){
+  const enemy=enemies[b.enemyId];
+  const damage=damageAfterDefense(power,(kind==='spell'?enemy.spellDefense:enemy.physicalDefense)??0);
   const absorbed=Math.min(b.shield||0,damage);
-  b.shield=(b.shield||0)-absorbed;b.enemy-=damage-absorbed;
+  b.shield=(b.shield||0)-absorbed;b.enemy-=damage-absorbed;return damage-absorbed;
 }
 
 const formationWidth=count=>Math.max(3,Math.ceil(count/2));
@@ -1027,10 +1036,16 @@ function battleFinish(s,result){
 }
 function battleRound(s){
   const b=s.battle,round=++b.round;
+  for(const fighter of b.team){
+    if(fighter.physicalAttack===undefined){
+      const {physicalAttack,physicalDefense,spellAttack,spellDefense}=combatStats(s.people[fighter.i]);
+      Object.assign(fighter,{physicalAttack,physicalDefense,spellAttack,spellDefense});
+    }
+  }
   let acted=false,cancelled=false,guarded=false,intercept=null;
   if(b.burning?.rounds>0){
-    b.burning.rounds--;hitEnemy(b,b.burning.damage);
-    b.lines.push('燃烧造成 '+b.burning.damage+' 伤害。');
+    b.burning.rounds--;const damage=hitEnemy(b,b.burning.damage,'spell');
+    b.lines.push('燃烧造成 '+damage+' 伤害。');
     if(b.enemy<=0){b.enemy=0;battleFinish(s,'胜利');return;}
   }
   const front=b.team.filter(f=>f.hp>0).sort((a,b)=>a.slot-b.slot);
@@ -1039,16 +1054,19 @@ function battleRound(s){
   const pounce=enemy.pounces&&round%2===0&&!!rear;
   const target=pounce?rear:front[0];
   const heavy=!enemy.pounces&&round%3===0;
-  b.lines.push('第 '+round+' 轮 · '+enemy.name+(pounce?'准备扑袭':heavy?'蓄力重击':'准备抓挠')+' '+s.people[target.i].name+'。');
+  b.lines.push('第 '+round+' 轮 · '+enemy.name+(pounce?'准备扑袭':heavy?'蓄力重击':enemy.spellHit?'凝聚妖术':'准备抓挠')+' '+s.people[target.i].name+'。');
   const actors=[...front,null].sort((a,b)=>(b?.speed??enemy.speed)-(a?.speed??enemy.speed)||(a===null?1:b===null?-1:a.slot-b.slot));
   for(const f of actors){
     if(!f){
       acted=true;
       if(cancelled)continue;
       const victim=intercept?.hp>0?intercept:target;
-      const damage=Math.max(1,Math.round(((heavy||pounce)?enemy.heavy:enemy.hit)*(victim.rank ? 0.9 : 1)*(guarded&&victim===target ? 0.5 : 1)*(victim===intercept&&mastered(s.people[victim.i],streamManual,6)?0.75:1))-(victim.heart?8:0));
+      const spell=enemy.spellHit&&!pounce;
+      const power=((heavy||pounce)?enemy.heavy:enemy.hit)*(victim.rank?0.9:1)
+        *(guarded&&victim===target?0.5:1)*(victim===intercept&&mastered(s.people[victim.i],streamManual,6)?0.75:1);
+      const damage=Math.max(1,damageAfterDefense(power,spell?victim.spellDefense:victim.physicalDefense)-(victim.heart?8:0));
       victim.heart=false;victim.hp=Math.max(0,victim.hp-damage);victim.down ||= !victim.hp;
-      b.lines.push(enemy.name+'命中'+s.people[victim.i].name+'，造成 '+damage+' 伤害。'+(victim.down?' 倒地。':''));
+      b.lines.push(enemy.name+'命中'+s.people[victim.i].name+'，造成 '+damage+(spell?' 法术':' 物理')+'伤害。'+(victim.down?' 倒地。':''));
       if(b.team.every(f=>f.down)){battleFinish(s,'战败');return;}
       continue;
     }
@@ -1069,7 +1087,7 @@ function battleRound(s){
       f.mp-=artCost(person,active);
       if(active==='pierce'){
         const removed=Math.min(b.shield,mastered(person,manuals.metal.name,6)?12:8);
-        b.shield-=removed;hitEnemy(b,f.dmg);b.lines.push(name+'施展破甲剑，削盾 '+removed+' 后普攻。');
+        b.shield-=removed;const damage=hitEnemy(b,f.physicalAttack);b.lines.push(name+'施展破甲剑，削盾 '+removed+'，造成 '+damage+' 物理伤害。');
       }
       if(active==='recover'){
         const previous=f.hp;
@@ -1077,18 +1095,18 @@ function battleRound(s){
         b.lines.push(name+'施展回息术，回复 '+(f.hp-previous)+' 气血。');
       }
       if(active==='burn'){
-        const damage=mastered(person,manuals.fire.name)?8:6;
-        hitEnemy(b,damage);b.burning={rounds:2,damage:mastered(person,manuals.fire.name,6)?5:4};
+        const damage=hitEnemy(b,f.spellAttack*0.5,'spell');
+        b.burning={rounds:2,damage:f.spellAttack*(mastered(person,manuals.fire.name,6)?0.35:0.25)};
         b.lines.push(name+'施展燃火术，造成 '+damage+' 伤害并点燃敌人。');
       }
-      if(active==='stone'){cancelled=true;hitEnemy(b,8);b.lines.push(name+'以飞石术打断重击，造成 8 伤害。');}
+      if(active==='stone'){cancelled=true;const damage=hitEnemy(b,f.spellAttack*0.6,'spell');b.lines.push(name+'以飞石术打断重击，造成 '+damage+' 法术伤害。');}
       if(active==='vine'){cancelled=true;b.lines.push(name+'以缠藤术阻止了扑袭。');}
       if(active==='guard'){guarded=true;b.lines.push(name+'施展护身诀。');}
       if(active==='stream'){intercept=f;b.lines.push(name+'施展引流护行，替同门挡招。');}
     }else{
       if(f.skills.some(condition))b.lines.push(name+'灵力不足，改用普攻。');
       if(heavy&&acted&&f.skills.includes('stone')&&!cancelled)b.lines.push(name+'出手时重击已落下，改用普攻。');
-      hitEnemy(b,f.dmg);b.lines.push(name+'普攻，造成 '+f.dmg+' 伤害。');
+      const damage=hitEnemy(b,f.physicalAttack);b.lines.push(name+'普攻，造成 '+damage+' 物理伤害。');
     }
     if(b.enemy<=0){b.enemy=0;battleFinish(s,'胜利');return;}
   }
@@ -1176,7 +1194,7 @@ function dispatch(s,a){
       break;
     }
     case 'point':
-      if(p?.points>0&&Number.isInteger(a.n)&&a.n>=0&&a.n<6&&p.stats[a.n]<10){p.points--;p.stats[a.n]++;return;}
+      if(p?.points>0&&Number.isInteger(a.n)&&a.n>=0&&a.n<attributes.length){p.points--;p.stats[a.n]++;return;}
       break;
     case 'production-target':
       if(s.created&&own(productionRecipes,a.value)&&Number.isSafeInteger(a.n)&&a.n>=0){
@@ -1228,7 +1246,7 @@ const option=(value,label,selected=false)=>'<option value="'+esc(value)+'" '+(se
 const clock=end=>'<span data-clock="'+end+'"></span>';
 const gearNames={wood:'青云木剑',iron:'旧铁剑',heart:'护心符',jade:'引灵佩','':'无'};
 let state=fresh(Date.now()), popup=null, overlay=null, busy=false, lastSignature='', temporary=false, channel=null;
-let draft={stats:[3,3,3,3,3,3]};
+let draft={stats:[3,3,3,3,3]};
 let assignment={task:'meditate',leader:'',partner:[],pack:0,repeat:false};
 let formation={}, eventActors={};
 let activeView='overview';
@@ -1258,6 +1276,12 @@ function database(){
 }
 function apply(current,command,wall){
   const next=current??readLocal(key)??migrate(readLocal(legacyKey),wall);
+  for(const person of next.people){
+    if(person.stats.length>attributes.length){
+      person.points=(person.points??0)+Math.max(0,person.stats[5]-3);
+      person.stats=person.stats.slice(0,attributes.length);
+    }
+  }
   next.stock.qi??=0;
   next.stock.wood??=0;
   next.stock.masonry??=0;
@@ -1581,7 +1605,7 @@ function activityStatus(p,i){
 }
 function growMarkup(p,i){
   if(!p.points)return '';
-  return '<p class="accent">待分配 '+p.points+' 点</p><div class="actions">'+attributes.map((a,n)=>btn(a+' +1','point','data-i="'+i+'" data-n="'+n+'"',p.stats[n]>=10?'已到 10 点':'')).join('')+'</div>';
+  return '<p class="accent">待分配 '+p.points+' 点</p><div class="actions">'+attributes.map((a,n)=>btn(a+' +1','point','data-i="'+i+'" data-n="'+n+'"')).join('')+'</div>';
 }
 let scheduleBrush='farm';
 function scheduleMarkup(){
@@ -1631,12 +1655,12 @@ function mentorshipMarkup(p,i){
     if(lessons.length)html+='<div class="actions">'+lessons.map(([id,[label]])=>
       btn('跟师父学'+label,'trade-lesson','data-i="'+i+'" data-value="'+id+'"',
         jobSpec(state,'apprentice',[p.mentor,i],id).reason)
-    ).join('')+'</div><small>带徒占用师徒双方 2 分钟，完成后徒弟获得 2 次对应差事经验。</small>';
+    ).join('')+'</div><small>带徒占用师徒双方 2 分钟，完成后徒弟获得 2 次基础差事经验。</small>';
     const books=Object.entries(transmissionBooks).filter(([,book])=>teacher.mastery[book.name]>=3&&!own(p.mastery,book.name));
     html+=books.length?'<div class="actions">'+books.map(([id,book])=>{
       const reason=jobSpec(state,'transmit',[p.mentor,i],id).reason;
       return btn('请教'+book.name,'transmit-book','data-i="'+i+'" data-value="'+id+'"',reason);
-    }).join('')+'</div><small>传功耗时 2 分钟，占用师徒双方。</small>':'<small>师父练熟的新功法会在这里显示。</small>';
+    }).join('')+'</div><small>传功占用师徒双方，耗时受徒弟悟性影响。</small>':'<small>师父练熟的新功法会在这里显示。</small>';
   }
   return html+'</section>';
 }
@@ -1654,7 +1678,7 @@ function peopleMarkup(){
     {slot:'weapon',label:'武器',mark:'剑',choices:['wood','iron']},
     {slot:'charm',label:'护身物',mark:'佩',choices:['','heart','jade']}
   ];
-  const effects={wood:'基础普攻 12',iron:'基础普攻 15',heart:'每场首次受击少扣 8 气血',jade:'灵力上限 +6','':'空槽'};
+  const effects={wood:'武器基础物攻 12',iron:'武器基础物攻 15',heart:'每场首次受击少扣 8 气血',jade:'灵力上限 +6','':'空槽'};
   const equipment=loadout.map(({slot,label,mark,choices})=>{
     const equipped=p[slot];
     const options=choices.filter(k=>k===equipped||k==='wood'||!k||state.gear[k]);
@@ -1662,8 +1686,8 @@ function peopleMarkup(){
       +'<label>'+label+'<select data-gear="'+slot+'" data-i="'+i+'" '+(idle?'':'disabled')+'>'
       +options.map(k=>option(k,k?gearNames[k]:'未装备',k===equipped)).join('')+'</select><small>'+effects[equipped]+'</small></label></div>';
   }).join('');
-  const {hp,mp,dmg,speed}=combatStats(p);
-  const vitals=[['气血上限',hp],['灵力上限',mp],['普攻',dmg],['先手',speed]].map(([label,value])=>
+  const {hp,mp,physicalAttack,physicalDefense,spellAttack,spellDefense,speed}=combatStats(p);
+  const vitals=[['气血上限',hp],['灵力上限',mp],['物攻',physicalAttack],['物防',physicalDefense],['法攻',spellAttack],['法防',spellDefense],['速度',speed]].map(([label,value])=>
     '<div><small>'+label+'</small><strong>'+value+'</strong></div>').join('');
   return '<div class="people-layout"><div class="people-list" aria-label="宗门成员">'+roster+'</div>'
     +'<article class="character-sheet rpg-sheet"><div class="rpg-summary"><div class="rpg-medallion"><span class="portrait" aria-hidden="true">'
@@ -1680,7 +1704,7 @@ function peopleMarkup(){
       return '<div class="row"><b>'+label+'</b><span>'+tradeRanks[level]
         +(level<2?' · '+count+'/'+(level===0?5:20):'')+'</span></div><small>'+effect+'（熟练／精通）</small>';
     }).join('')+'</section>'+mentorshipMarkup(p,i)+btn('安排每日作息','jump','data-value="schedule-page"')
-    +'<section class="rpg-card"><h4>六维属性</h4><div class="character-stats">'
+    +'<section class="rpg-card"><h4>五维属性</h4><div class="character-stats">'
     +p.stats.map((n,k)=>'<div><span>'+attributes[k]+'</span><b>'+n+'</b></div>').join('')+'</div>'+growMarkup(p,i)+'</section>'
     +'<section class="rpg-card"><h4>装备槽</h4><div class="rpg-slots">'+equipment+'</div></section>'
     +'<div class="row"><small>主修 '+esc(p.technique)+'</small>'+btn('查看功法','jump','data-value="manual-page"')+'</div></article></div>';
@@ -1714,7 +1738,7 @@ function manualsMarkup(){
         :'<small>'+(studying?'学习中 · '+clock(studyJob.end):esc(reason||'可学习 · '+(task==='manual'?1:2)+' 分钟'))+'</small>')
       +(action&&!studying?'<div class="actions">'+action+'</div>':'')+'</article>';
   }).join('');
-  const artEffects={pierce:'目标有护盾时先削盾再普攻',recover:'自身气血不超过 40% 时回复，每场一次',burn:'点燃敌人，持续两轮',guard:'重击命中前施放，减半本轮下一次受伤',stone:'先手打断重击，并造成 8 伤害',vine:'先手阻止敌人扑袭后排',stream:'重击前施放，替同门挡招'};
+  const artEffects={pierce:'目标有护盾时先削盾再普攻',recover:'自身气血不超过 40% 时回复，每场一次',burn:'造成 50% 法攻伤害，并燃烧两轮',guard:'重击命中前施放，减半本轮下一次受伤',stone:'先手打断重击，并造成 60% 法攻伤害',vine:'先手阻止敌人扑袭后排',stream:'重击前施放，替同门挡招'};
   const learned=p.known.map(id=>'<div class="rpg-art"><span class="rpg-art-icon" aria-hidden="true">'+arts[id][0]+'</span><div><b>'
     +arts[id]+'</b><small>'+artCost(p,id)+' 灵力 · '+artEffects[id]+'</small></div></div>').join('');
   return '<div class="row"><h2>宗门功法</h2><label>修习者 <select data-manual-person>'
@@ -1821,16 +1845,16 @@ function warehouse(){
       .map(([id,label,n,cost])=>btn(label+' · '+n+' '+resources[cost],'craftGear','data-value="'+id+'"',missing(s,{[cost]:n}))).join('')+'</div></details></div>';
 }
 function setup(){
-  let left=36-draft.stats.reduce((a,b)=>a+b,0);
+  let left=33-draft.stats.reduce((a,b)=>a+b,0);
   if(!$('allocation')){
     $('start-screen').innerHTML='<h2>接掌青云宗</h2><p>你是青云宗第三任掌门，炼气后期。山门只余两名弟子，案上还有一份欠石桥镇的借泉契。</p>'
       +'<label>掌门名号<input id="leader-name" maxlength="16" placeholder="输入名号" autocomplete="off"></label> '
       +'<label>掌门灵根<select id="leader-root">'+elements.map(e=>option(e,e+'灵根')).join('')+'</select></label><div id="allocation"></div>';
   }
-  $('allocation').innerHTML='<p>待分配 <b>'+left+'</b> 点 · 每项 3–8 · 总计 36 点</p><div class="allocation">'
+  $('allocation').innerHTML='<p>待分配 <b>'+left+'</b> 点 · 每项至少 3 · 总计 33 点</p><div class="allocation">'
     +attributes.map((a,i)=>'<div><b>'+a+'</b>'+btn('−','draft','data-n="'+i+'" data-delta="-1"',draft.stats[i]<=3?'已到下限':'')+'<span>'+draft.stats[i]+'</span>'
-      +btn('＋','draft','data-n="'+i+'" data-delta="1"',draft.stats[i]>=8||left<=0?'无可用点数':'')+'</div>').join('')
-    +'</div><div class="actions">'+btn('均衡分配','balance')+btn('接过掌门印','create','class="gold"',left!==0?'请分完 36 点':'')+'</div>';
+      +btn('＋','draft','data-n="'+i+'" data-delta="1"',left<=0?'无可用点数':'')+'</div>').join('')
+    +'</div><div class="actions">'+btn('均衡分配','balance')+btn('接过掌门印','create','class="gold"',left!==0?'请分完 33 点':'')+'</div>';
 }
 function calendarMarkup(){
   return '接任第 '+year(state)+' 年 · '+seasons[season(state)]+' · '+String(gameHour(state)).padStart(2,'0')+':00 · 距换季 '+clock((Math.floor(state.time/seasonLength)+1)*seasonLength);
@@ -1948,7 +1972,7 @@ function handle(e){
     assignment.leader=String(i);assignment.partner=[];selectedPersonExplicitly=true;render();jump('assignments');return;
   }
   if(kind==='draft'){draft.stats[n]+=Number(b.dataset.delta);setup();return;}
-  if(kind==='balance'){draft.stats=[6,6,6,6,6,6];setup();return;}
+  if(kind==='balance'){draft.stats=[7,7,7,6,6];setup();return;}
   if(kind==='create'){sync({kind,name:$('leader-name').value,stats:draft.stats.slice(),element:$('leader-root').value});return;}
   if(kind==='manual-filter'){
     manualCategory=value;
