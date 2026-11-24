@@ -86,8 +86,10 @@ header{height:75px;display:flex;align-items:center;justify-content:space-between
 .map-details .form-grid{grid-template-columns:minmax(0,1fr)}.map-details .task-form{padding:10px}.map-legend{color:var(--muted);font-size:13px;margin:8px 0}
 @media(max-width:850px){.map-layout{grid-template-columns:minmax(0,1fr)}.map-details{max-height:none}}
 .battlefield-scroll{overflow-x:auto}.battlefield{display:grid;gap:6px;margin:8px 0 16px}.battlefield-row{display:grid;grid-template-columns:4em repeat(var(--battle-cols),minmax(60px,1fr));gap:5px;align-items:stretch}.battlefield-row>small{align-self:center}.battle-cell{min-height:44px;padding:4px;display:grid;place-items:center;border:1px solid #526756;border-radius:6px;background:#23372b;text-align:center;font-size:13px;overflow-wrap:anywhere}.battle-cell.enemy{background:#332720;border-color:#644a3c}.battle-cell.chosen{border-color:var(--gold);color:var(--gold)}.battle-cell.down{opacity:.55}
+.town-window{width:min(900px,94vw);max-height:88vh;overflow:auto;color:var(--ink);background:var(--surface);border:1px solid #73866c;border-radius:14px;padding:20px}.town-window::backdrop{background:#000a}.town-window .town-header{position:sticky;top:-20px;background:var(--surface);z-index:2;padding:12px 0}.town-window .task-form{margin-top:12px}
 </style>
 
+<dialog id="town-window" class="town-window" aria-label="石桥镇"></dialog>
 <main id="app">
 <header><div class="brand"><span class="seal">宗</span> 百年小宗</div><button id="pip" class="gold" disabled>开启画中画</button></header>
 <p id="notice" class="toast" role="status" hidden></p>
@@ -302,11 +304,11 @@ const tasks = {
   hill:['后山采药',3],seek:['寻筑基辅药',3],patrol:['后山巡山',3],rain:['雨季巡山',3],
   ape:['驱离山猿',3],trail:['巡查獾道',3],outer:['查荒庙外围',2],town:['石桥镇查井',2],temple:['无灯荒庙下井',3],
   brew:['炼筑基丹',2],break:['筑基冲关',1],restore:['借泉复阵',2],seal:['封住残阵',2],
-  ditch:['清理旧渠',2],canal:['沿渠采药',3],repair:['主持修缮',3],recruit:['赴石桥镇访徒',3],
+  ditch:['清理旧渠',2],canal:['沿渠采药',3],repair:['主持修缮',3],visitTown:['前往石桥镇',1],recruit:['赴石桥镇访徒',3],
   explore:['勘查迷雾',2],clearRocks:['清理落石',2],forge:['打造装备',3],read:['参悟《青崖引泉诀》',2],vine:['学缠藤术',1],heal:['炼疗伤丹',1],qi:['炼聚气丹',1],teach:['传授功法心得',1],
   trade:['石桥镇换粮',2],winter:['围炉讲法',1]
 };
-const travel = new Set([...Object.keys(townJobs),'survey','develop','harvest','hill','seek','patrol','rain','ape','trail','outer','town','temple','canal','recruit','trade']);
+const travel = new Set([...Object.keys(townJobs),'survey','develop','harvest','hill','seek','patrol','rain','ape','trail','outer','town','temple','canal','recruit','trade','visitTown']);
 const groupTravel = new Set([...Object.keys(townJobs),'survey','develop','harvest','hill','seek','patrol','rain','ape','temple','canal','outer']);
 const materialDuties={timber:['wood','forest','mist1'],masonry:['masonry','quarry','mist2']};
 const stockGoal=(s,id)=>s.workGoals?.[id]??(['wood','masonry'].includes(id)?12:0);
@@ -710,6 +712,10 @@ function jobSpec(s,type,ids,arg='',pack=0){
       const [name,minutes,materials]=repairs[arg];
       label=name;duration=minutes;cost=materials;break;
     }
+    case 'visitTown':
+      if(current('visitTown'))return fail('已有弟子在路上。');
+      if(s.townVisit)return fail('已有弟子抵达石桥镇。');
+      break;
     case 'recruit': {
       const reason=recruitUnlock(s);
       if(reason)return fail(reason);
@@ -744,6 +750,7 @@ function start(s,type,ids,arg='',pack=0,repeat=false){
   if(spec.reason)return spec.reason;
   s.jobs=s.jobs.filter(j=>!j.leisure||!j.people.some(i=>ids.includes(i)));
   spend(s,spec.cost,spec.useReserve);
+  if(s.townVisit&&ids.includes(s.townVisit.person))delete s.townVisit;
   if(type==='trade'&&spec.arg==='autumn')s.seasonClaims.autumn=year(s);
   if(type==='winter')s.seasonClaims.winter=year(s);
   s.jobs.push({id:++s.serial,type,people:ids,qiBonus:takeQi(s,s.people[ids[0]],type),arg:spec.arg,pack,end:s.time+spec.duration*minute,
@@ -853,6 +860,7 @@ function complete(s,j){
     case 'canal':s.stock.herbs+=4;break;
     case 'forge':s.gear[j.arg]++;break;
     case 'repair':s.built[j.arg]=j.arg==='farm'?true:(Number(s.built[j.arg])||0)+1;break;
+    case 'visitTown':s.townVisit={id:j.id,person:j.people[0]};break;
     case 'recruit':{
       const plan=annualRecruit(s);
       if(plan){plan.listed=true;log(s,p.name+'带回了第 '+plan.year+' 年的招徒名册。');}
@@ -893,7 +901,7 @@ function assignDuties(s){
   const order=s.people.map((p,i)=>({p,i,leisure:scheduleMode(s,p)==='free'}));
   order.sort((a,b)=>Number(a.leisure)-Number(b.leisure));
   order.forEach(({p,i})=>{
-    if(!free(s,i)||jobFor(s,i)||p.schedulePaused)return;
+    if(!free(s,i)||jobFor(s,i)||p.schedulePaused||s.townVisit?.person===i)return;
     const mode=scheduleMode(s,p);
     const duty=mode==='duty'&&!p.dutyPaused&&own(duties,p.duty)?duties[p.duty]:null;
     const alchemy=mode==='heal'||duty?.[1]==='heal';
@@ -1315,6 +1323,7 @@ function dispatch(s,a){
       if(!p?.duty)break;
       p.dutyPaused=false;return;
     }
+    case 'leave-town':delete s.townVisit;return;
     case 'accept-recruit':{
       if(!s.created||a.token!==year(s))return '招徒名册已过期。';
       const plan=s.annualRecruit,index=a.n;
@@ -1677,6 +1686,30 @@ function productionMarkup(s){
     +btn(s.autoQi?'停止自动服用聚气丹':'开启自动服用聚气丹','auto-qi')
     +'<p class="muted">目标含库存与在炼数量。排到炼丹却无法开炉时，弟子自由活动。开启自动服用后，炼气弟子每轮静修开始时消耗 1 枚聚气丹，本轮静修修为 +30%。</p></section>';
 }
+let seenTownVisit=null;
+function townApproachMarkup(){
+  const visit=state.townVisit, walking=state.jobs.find(j=>j.type==='visitTown');
+  const head='<h3>石桥镇</h3><p class="muted">坊市、招徒与镇上委托</p>';
+  if(visit)return head+'<p>'+esc(state.people[visit.person].name)+'已抵达</p>'+btn('进入石桥镇','open-town','class="gold"');
+  if(walking)return head+'<p>'+esc(state.people[walking.people[0]].name)+'在路上 · '+clock(walking.end)+'</p>';
+  const i=Number(assignment.leader);
+  const chosen=state.people[i]&&assignment.leader!==''?i:Math.max(0,state.people.findIndex((_,n)=>free(state,n)));
+  assignment.leader=String(chosen);
+  const spec=jobSpec(state,'visitTown',[chosen]);
+  return head+'<label>执行者 <select data-field="leader">'+personOptions(chosen)+'</select></label>'
+    +'<p><small>'+esc(spec.reason||'1 分钟 · 2 口粮')+'</small></p>'
+    +btn('前往石桥镇','visit-town','data-i="'+chosen+'" class="gold"',spec.reason);
+}
+function refreshTownWindow(){
+  const dialog=$('town-window'),visit=state.townVisit;
+  if(!visit){if(dialog.open)dialog.close();return;}
+  if(!dialog.open&&activeView==='map'&&selectedBuilding==='town'&&seenTownVisit!==visit.id){
+    seenTownVisit=visit.id;chooseBuilding('town');assignment.leader=String(visit.person);selectedPersonExplicitly=true;dialog.showModal();
+  }
+  if(dialog.open)dialog.innerHTML='<div class="row town-header"><h2>石桥镇</h2><div class="actions">'
+    +btn('返回山门','leave-town')+btn('关闭窗口','close-town')+'</div></div>'
+    +'<p>'+esc(state.people[visit.person].name)+'已抵达</p>'+assignmentPanel();
+}
 function assignmentMarkup(){
   if(activeView!=='map')return assignmentPanel();
   const selected=mapTiles[selectedTile];
@@ -1690,6 +1723,7 @@ function assignmentMarkup(){
   }).join('');
   let detail='';
   if(selected==='sect')detail='<h3>青云宗</h3>'+btn('进入宗门建筑','view','data-value="dispatch"');
+  else if(selected==='town')detail=townApproachMarkup();
   else if(selected)detail=pending.filter(e=>eventPlaces[e.id]===selected).map(e=>'<article class="pending">'+eventCard(e)+'</article>').join('')+assignmentPanel();
   return '<h2>宗门地图</h2><div class="map-layout"><div><div class="map-scroll"><div class="map-grid">'+mapRoads.map(roadMarkup).join('')+tiles
     +'</div></div><p class="map-legend">虚线为道路 · ! 待处理事件</p></div><aside class="map-details">'+detail+'</aside></div>';
@@ -2125,6 +2159,7 @@ function render(){
   $('event-count').textContent=waiting;
   showView(activeView);
   if(own(assignmentPages,activeView))$('assignments').innerHTML=assignmentMarkup();
+  refreshTownWindow();
   $('event').hidden=!state.eventQueue.length;
   $('event').innerHTML='<h2>待处理 · '+state.eventQueue.length+'</h2>'+state.eventQueue.map(e=>'<article class="pending">'+eventCard(e)+'</article>').join('');
   $('battle').innerHTML=battleMarkup();$('battle').hidden=!$('battle').innerHTML;
@@ -2173,6 +2208,9 @@ function jump(id){
 function handle(e){
   const b=e.target.closest('button[data-kind]');if(!b||b.disabled)return;
   const {kind,value}=b.dataset, i=Number(b.dataset.i),n=Number(b.dataset.n),token=Number(b.dataset.token);
+  if(kind==='visit-town'){sync({kind:'start',task:'visitTown',ids:[i]});return;}
+  if(kind==='open-town'){if(state.townVisit){seenTownVisit=state.townVisit.id;chooseBuilding('town');assignment.leader=String(state.townVisit.person);selectedPersonExplicitly=true;$('town-window').showModal();refreshTownWindow();clocks();}return;}
+  if(kind==='close-town'){$('town-window').close();return;}
   if(kind==='close'){popup?.close();overlay?.remove();overlay=null;return;}
   if(kind==='jump'){jump(value);return;}
   if(kind==='view'){showView(value);if(own(assignmentPages,value))$('assignments').innerHTML=assignmentMarkup();return;}
