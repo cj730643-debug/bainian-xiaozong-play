@@ -87,6 +87,7 @@ header{height:75px;display:flex;align-items:center;justify-content:space-between
 @media(max-width:850px){.map-layout{grid-template-columns:minmax(0,1fr)}.map-details{max-height:none}}
 .battlefield-scroll{overflow-x:auto}.battlefield{display:grid;gap:6px;margin:8px 0 16px}.battlefield-row{display:grid;grid-template-columns:4em repeat(var(--battle-cols),minmax(60px,1fr));gap:5px;align-items:stretch}.battlefield-row>small{align-self:center}.battle-cell{min-height:44px;padding:4px;display:grid;place-items:center;border:1px solid #526756;border-radius:6px;background:#23372b;text-align:center;font-size:13px;overflow-wrap:anywhere}.battle-cell.enemy{background:#332720;border-color:#644a3c}.battle-cell.chosen{border-color:var(--gold);color:var(--gold)}.battle-cell.down{opacity:.55}
 .town-window{width:min(900px,94vw);max-height:88vh;overflow:auto;color:var(--ink);background:var(--surface);border:1px solid #73866c;border-radius:14px;padding:20px}.town-window::backdrop{background:#000a}.town-window .town-header{position:sticky;top:-20px;background:var(--surface);z-index:2;padding:12px 0}.town-window .task-form{margin-top:12px}
+.manual-art{padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface-raised)}.manual-art>*{display:block}
 </style>
 
 <dialog id="town-window" class="town-window" aria-label="石桥镇"></dialog>
@@ -1941,6 +1942,18 @@ function peopleMarkup(){
     +'<section class="rpg-card"><h4>装备槽</h4><div class="rpg-slots">'+equipment+'</div></section>'
     +'<div class="row"><small>主修 '+esc(p.technique)+'</small>'+btn('查看功法','jump','data-value="manual-page"')+'</div></article></div>';
 }
+function artDescription(p,id){
+  const effects={
+    guard:'重击前护住自己，本次伤害降低 '+(mastered(p,starterManual,6)?60:50)+'%。',
+    stone:'射程 3 格。抢先打断蓄力重击，并造成 60% 法攻的法术伤害。',
+    vine:'射程 3 格。在敌人扑向后排前阻止它。',
+    stream:'在重击落下前替同门挡招。'+(mastered(p,streamManual,6)?'承受该招时额外减伤 25%。':''),
+    pierce:'射程 1 格。敌人有护盾时，先削去 '+(mastered(p,manuals.metal.name,6)?75:50)+'% 剩余护盾，再进行物理普攻。',
+    recover:'自身气血不超过 40% 时，回复 '+(mastered(p,manuals.water.name,6)?22:15)+'% 最大气血。每场一次。',
+    burn:'射程 3 格。目标未燃烧时造成 50% 法攻的法术伤害，并燃烧两轮，每轮 '+(mastered(p,manuals.fire.name,6)?35:25)+'% 法攻。'
+  };
+  return '<b>'+arts[id]+'</b><small>'+artCost(p,id)+' 灵力 · '+effects[id]+'</small>';
+}
 function manualsMarkup(){
   const i=selectedCharacter??state.leader,p=state.people[i];
   const books=[
@@ -1966,16 +1979,14 @@ function manualsMarkup(){
     return '<article class="rpg-card manual-card'+(current?' current':'')+'"><small class="manual-meta">'+book.grade+' · '
       +(book.element?book.element+'系':'通用')+'</small><h3>'+book.name+'</h3>'
       +'<small>'+((book.name===streamManual)?'筑基 · 荒庙残卷':'炼气 · 宗门典籍')+'</small>'
-      +'<p>'+book.intro+'</p>'+(book.art?'<div>习得术法 · '+arts[book.art]+'</div>':'')
+      +'<p>'+book.intro+'</p>'+(book.art?'<div class="manual-art"><small>习得术法</small>'+artDescription(p,book.art)+'</div>':'')
       +(book.bonus?'<small>主修熟练（3） · '+book.bonus+'</small><small>主修圆满（6） · '+book.master+'</small>':'')
       +(known?'<small>'+(current?'主修 · ':'已学 · ')+(points>=6?'圆满':points>=3?'熟练':'入门')+' '+points+'/6</small>'
         +'<div class="meter"><span style="width:'+points/6*100+'%"></span></div>'
         :'<small>'+(studying?'学习中 · '+clock(studyJob.end):esc(reason||'可学习 · '+Math.round((spec?.duration??0)*60)+' 秒'))+'</small>')
       +(action&&!studying?'<div class="actions">'+action+'</div>':'')+'</article>';
   }).join('');
-  const artEffects={pierce:'目标有护盾时先削去剩余护盾的 50%，再普攻',recover:'气血不超过 40% 时回复最大气血的 15%，每场一次',burn:'造成 50% 法攻伤害，随后燃烧两轮，每轮 25% 法攻',guard:'抢在重击前护住自己，基础减伤 50%',stone:'先手打断重击，并造成 60% 法攻伤害',vine:'先手阻止敌人扑袭后排',stream:'重击前施放，替同门挡招'};
-  const learned=p.known.map(id=>'<div class="rpg-art"><span class="rpg-art-icon" aria-hidden="true">'+arts[id][0]+'</span><div><b>'
-    +arts[id]+'</b><small>'+artCost(p,id)+' 灵力 · '+artEffects[id]+'</small></div></div>').join('');
+  const learned=p.known.map(id=>'<div class="rpg-art"><span class="rpg-art-icon" aria-hidden="true">'+arts[id][0]+'</span><div>'+artDescription(p,id)+'</div></div>').join('');
   return '<div class="row"><h2>宗门功法</h2><label>修习者 <select data-manual-person>'
     +personOptions(i)+'</select></label></div><small>'+esc(rootLabel(p))+' · '+rankName(p)+'</small>'
     +filters('用途',['全部','修炼功法','战斗功法','身法功法'],'manual-filter',manualCategory)
