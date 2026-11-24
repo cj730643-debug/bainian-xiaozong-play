@@ -135,10 +135,21 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
 .learned-manual-row .actions{margin:0}
 #manual-hint{position:fixed;z-index:1000;pointer-events:none;width:max-content;max-width:min(340px,calc(100vw - 24px));padding:11px 14px;background:var(--surface);color:var(--ink);border:1px solid var(--edge);border-radius:8px;box-shadow:0 6px 22px #283a2938;font-size:15px;line-height:1.5}
 #manual-hint small{display:block;margin-top:3px}
+.guide-intro{margin:8px 0 0}.guide-quick{margin-top:12px}.guide-quick p{margin:0 0 8px}.guide-quick .actions{margin:0}#new-player-guide{width:min(720px,calc(100% - 24px))}#new-player-guide details{margin-top:8px;padding:8px 12px;border:1px solid var(--line);border-radius:8px}#new-player-guide summary{font-weight:700}#new-player-guide li+li{margin-top:5px}
 </style>
 
 <dialog id="recruit-event" class="town-window" aria-label="招徒名册"></dialog>
 <dialog id="town-window" class="town-window" aria-label="石桥镇"></dialog>
+<dialog id="new-player-guide" class="town-window" aria-labelledby="guide-title">
+  <div class="row town-header"><h2 id="guide-title">新手指引</h2><form method="dialog"><button type="submit">关闭指引</button></form></div>
+  <p class="guide-intro">第一次接印，可以先安排两件差事，边等结算边熟悉山门。下面的条目可以随时回来查。</p>
+  <details open><summary>先让宗门运转</summary><ol><li>点「建筑」，选择静室或药圃。选好差事，点弟子的名字，再点「开始」。忙碌的人会显示原因。</li><li>先让掌门静修，再让阿禾照料药圃，两件事可以同时进行。药圃每轮产出口粮和药材。</li><li>等倒计时结束，收成会入仓。菜单出现「事件与战斗」提醒时，点进去处理选择。</li></ol><div class="actions"><button type="button" data-kind="guide-go" data-value="dispatch" data-site="study" data-task="meditate">安排静修</button><button type="button" data-kind="guide-go" data-value="dispatch" data-site="farm" data-task="farm">安排种药</button><button type="button" data-kind="guide-go" data-value="events">查看事件</button></div></details>
+  <details><summary>地图与出行</summary><p>打开「地图」，点击文字格子查看地点。选择差事后，点弟子方格组队，出发前看看口粮和预计用时。头像沿虚线移动。去石桥镇要先派人前往，抵达后由在镇的弟子操作坊市和访徒。</p><p>缺木材或石料时，去松林伐木场或青石采石场，按各地点显示的差事采集。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="map">打开地图</button></div></details>
+  <details><summary>修行、功法与筑基</summary><ol><li>在静室修到炼气圆满（修为 100）。在「功法」页选修习者，按灵根和境界学习。已学内容在「人物 → 已学功法」，悬停功法名可看效果。</li><li>药圃每照料 3 轮收 1 份筑基主药。辅药去青崖后山找，队里有神识至少 6 的人可在岩背獾事件中选绕行，也可布阵迎战。</li><li>让掌门在丹房消耗主药、辅药各 1 份及普通药材 3 份炼丹，再让任意炼气圆满的成员去静室冲关。</li></ol><div class="actions"><button type="button" data-kind="guide-go" data-value="manuals">查看宗门功法</button><button type="button" data-kind="guide-go" data-value="dispatch" data-site="furnace" data-task="brew">前往丹房</button></div></details>
+  <details><summary>设置作息与休息</summary><p>进「作息」，选弟子，再选种药、修行或休息等活动，点击小时格安排。可以先用「日常模板」再改几个时段。现实 30 秒等于游戏 1 小时，安排每天重复。</p><p>给弟子留出休息时间。自由时段由弟子根据状态行动，疲劳过高会优先休息。要手动派人时，先看人物状态和按钮旁的原因。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="schedule">设置作息</button></div></details>
+  <details><summary>收徒与拜师</summary><p><strong>招募新弟子</strong>　先在山门厢房增建一处厢房，再把石桥镇声望升到 1（例如完成护送商队）。派人到镇上，点「年度招徒 → 开始访徒」。3 分钟后在弹窗挑人，每人需要 3 口粮和一张空床。开局每年可收 1 人，名册全年有效。</p><p><strong>安排师承</strong>　宗门有人筑基后，打开「人物」，选炼气弟子，进「差事与师承」拜师。双方空闲时可以请教功法或学习师父精通的差事。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="dispatch" data-site="gate" data-task="repair.room">前往山门厢房</button><button type="button" data-kind="guide-go" data-value="people">查看人物</button></div></details>
+  <details><summary>战斗、仓库与小窗</summary><p>遇战斗先到「事件与战斗」布阵。近战放前面，远程放后面，按敌人的行动意图选术法，再开战让队伍自动行动。战后受伤的弟子需要休养。</p><p>「宗门仓库」可看资源、账房和预留备料。页首可以开启画中画，方便边做别的事边看差事和待办。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="warehouse">查看宗门仓库</button></div></details>
+</dialog>
 <main id="app">
 <header><div class="brand"><span class="seal">宗</span> 百年小宗</div><button id="pip" class="gold" disabled>开启画中画</button></header>
 <p id="notice" class="toast" role="status" hidden></p>
@@ -2478,7 +2489,7 @@ function setup(){
   if(!$('allocation')){
     $('start-screen').innerHTML='<h2>接掌青云宗</h2><p>你是青云宗第三任掌门，炼气后期。山门只余两名弟子，案上还有一份欠石桥镇的借泉契。</p>'
       +'<label>掌门名号<input id="leader-name" maxlength="16" placeholder="输入名号" autocomplete="off"></label> '
-      +'<label>掌门灵根<select id="leader-root">'+elements.map(e=>option(e,e+'灵根')).join('')+'</select></label><div id="allocation"></div>';
+      +'<label>掌门灵根<select id="leader-root">'+elements.map(e=>option(e,e+'灵根')).join('')+'</select></label><div id="allocation"></div><p class="guide-intro">第一次玩可先点「均衡分配」，接印后在宗门总览打开新手指引。</p>';
   }
   $('allocation').innerHTML='<p>待分配 <b>'+left+'</b> 点 · 每项至少 3 · 总计 33 点</p><div class="allocation">'
     +attributes.map((a,i)=>'<div><b>'+a+'</b>'+btn('−','draft','data-n="'+i+'" data-delta="-1"',draft.stats[i]<=3?'已到下限':'')+'<span>'+draft.stats[i]+'</span>'
@@ -2514,7 +2525,10 @@ function render(){
   const waiting=state.eventQueue.length;
   $('objective').innerHTML='<div class="chapter-body"><h2>宗门事务</h2><div class="actions">'
     +btn('建筑','view','data-value="dispatch" class="gold"')+btn('地图','view','data-value="map"')
-    +(waiting?btn('处理事件 · '+waiting,'view','data-value="events"'):'')+'</div></div>';
+    +(waiting?btn('处理事件 · '+waiting,'view','data-value="events"'):'')+'</div>'
+    +'<section class="rpg-card guide-quick"><p><b>第一次接印</b> · 先让掌门静修，让阿禾照料药圃。</p><div class="actions">'
+    +'<button type="button" data-kind="guide-go" data-value="dispatch" data-site="study" data-task="meditate">安排静修</button><button type="button" data-kind="guide-go" data-value="dispatch" data-site="farm" data-task="farm">安排种药</button>'+btn('新手指引','open-guide')
+    +'</div></section></div>';
   $('overview-roster').innerHTML='<h2>山门人手</h2>'+state.people.map((p,i)=>'<div class="row">'
     +'<div class="person-name"><span class="portrait" aria-hidden="true">'+esc(Array.from(p.name)[0])+'</span><div><b>'+esc(p.name)+'</b>'
     +'<small>'+rankName(p)+'</small></div></div><span class="work-status">'+actorStatus(p,i)+'</span>'
@@ -2611,6 +2625,16 @@ function handle(e){
   if(kind==='close-town'){$('town-window').close();return;}
   if(kind==='close'){popup?.close();overlay?.remove();overlay=null;return;}
   if(kind==='jump'){jump(value);return;}
+  if(kind==='open-guide'){$('new-player-guide').showModal();return;}
+  if(kind==='guide-go'){
+    const guide=$('new-player-guide');
+    if(guide.open)guide.close();
+    if(b.dataset.site)chooseBuilding(b.dataset.site,b.dataset.task);
+    showView(value);
+    if(own(assignmentPages,value))$('assignments').innerHTML=assignmentMarkup();
+    document.querySelector('[data-view="'+value+'"]')?.scrollIntoView({block:'start'});
+    return;
+  }
   if(kind==='view'){showView(value);if(own(assignmentPages,value))$('assignments').innerHTML=assignmentMarkup();return;}
   if(kind==='schedule-brush'){scheduleBrush=value;$('schedule-page').innerHTML=scheduleMarkup();clocks();return;}
   if(kind==='schedule-cell'){sync({kind:'schedule',i,n,value:scheduleBrush});return;}
