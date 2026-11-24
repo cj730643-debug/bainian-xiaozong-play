@@ -122,6 +122,19 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
 .dispatch-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,91px),1fr))}.dispatch-person .dispatch-tag{font-size:12px}.dispatch-person small{font-size:13px}
 .mini{font-size:16px}.mini button{font-size:15px}.mini .hero canvas{filter:saturate(.38) contrast(.88)}
 @media(max-width:760px){.schedule-hours{grid-template-columns:repeat(12,minmax(54px,1fr))}}
+/* Character dossier and manual effect hints */
+.character-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.character-tabs [aria-pressed=true]{background:#30463b;color:#fff9e9;border-color:#30463b}
+.character-sheet{min-width:0}
+.character-heading{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.character-heading h3{margin:0}
+.main-manual-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:8px;margin-bottom:14px}
+.manual-hint-trigger{display:inline-block;text-align:left;max-width:100%;font-weight:700;text-decoration:underline dotted;text-underline-offset:4px;background:transparent;border-color:transparent;padding:2px 4px;overflow-wrap:anywhere}
+.manual-group{margin-top:10px}
+.learned-manual-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px 12px;padding:7px 0;border-top:1px solid var(--line)}
+.learned-manual-row .actions{margin:0}
+#manual-hint{position:fixed;z-index:1000;pointer-events:none;width:max-content;max-width:min(340px,calc(100vw - 24px));padding:11px 14px;background:var(--surface);color:var(--ink);border:1px solid var(--edge);border-radius:8px;box-shadow:0 6px 22px #283a2938;font-size:15px;line-height:1.5}
+#manual-hint small{display:block;margin-top:3px}
 </style>
 
 <dialog id="recruit-event" class="town-window" aria-label="招徒名册"></dialog>
@@ -1586,6 +1599,7 @@ let assignment={task:'meditate',leader:'',partner:[],pack:0,repeat:false};
 let formation={}, eventActors={};
 let activeView='overview';
 let selectedCharacter=null;
+let characterPanel='overview';
 let manualCategory='全部';
 let manualElement='全部';
 
@@ -2211,6 +2225,21 @@ function peopleMarkup(){
       +esc(Array.from(person.name)[0])+'</span><span><b>'+esc(person.name)+'</b><small>'
       +(id===state.leader?'掌门 · ':'')+rankName(person)+'</small></span></button>';
   }).join('');
+  const learned=manualBooks.filter(book=>own(p.mastery,book.name));
+  const tabs=[['overview','概况'],['manuals','已学功法 '+learned.length],['combat','战斗与装备'],['duties','差事与师承']];
+  const start='<div class="people-layout"><div class="people-list" aria-label="宗门成员">'+roster+'</div>'
+    +'<article class="character-sheet rpg-sheet"><header class="character-heading"><span class="portrait" aria-hidden="true">'+esc(Array.from(p.name)[0])
+    +'</span><div><h3>'+esc(p.name)+'</h3><small>'+rankName(p)+' · '+esc(rootLabel(p))+'</small></div></header>'
+    +'<div class="character-tabs" role="group" aria-label="人物档案">'+tabs.map(([id,label])=>
+      btn(label,'character-panel','data-value="'+id+'" aria-pressed="'+(characterPanel===id)+'"')).join('')+'</div>';
+  const end='</article></div>';
+  if(characterPanel==='manuals')return start+learnedManualsMarkup(p,i,learned)+end;
+  if(characterPanel==='duties')return start+dutyMarkup(p,i)+'<section class="rpg-card"><h4>差事熟练度</h4>'
+    +Object.entries(trades).map(([id,[label,effect]])=>{
+      const count=tradeCount(p,id),level=tradeLevel(count);
+      return '<div class="row"><b>'+label+'</b><span>'+tradeRanks[level]
+        +(level<2?' · '+count+'/'+(level===0?5:20):'')+'</span></div><small>'+effect+'（熟练／精通）</small>';
+    }).join('')+'</section>'+mentorshipMarkup(p,i)+btn('安排每日作息','jump','data-value="schedule-page"')+end;
   const loadout=[
     {slot:'weapon',label:'武器',mark:'剑',choices:['wood','iron','bow']},
     {slot:'charm',label:'护身物',mark:'佩',choices:['','heart','jade']}
@@ -2226,26 +2255,18 @@ function peopleMarkup(){
   const {hp,mp,physicalAttack,physicalDefense,spellAttack,spellDefense,speed}=combatStats(p);
   const vitals=[['气血上限',hp],['灵力上限',mp],['物攻',physicalAttack],['物防',physicalDefense],['法攻',spellAttack],['法防',spellDefense],['速度',speed]].map(([label,value])=>
     '<div><small>'+label+'</small><strong>'+value+'</strong></div>').join('');
-  return '<div class="people-layout"><div class="people-list" aria-label="宗门成员">'+roster+'</div>'
-    +'<article class="character-sheet rpg-sheet"><div class="rpg-summary"><div class="rpg-medallion"><span class="portrait" aria-hidden="true">'
-    +esc(Array.from(p.name)[0])+'</span><h3>'+esc(p.name)+'</h3><small>'+rankName(p)+'</small></div>'
-    +'<div class="rpg-side"><div class="row"><div><small>'+(i===state.leader?'掌门':'弟子')+' · '+p.age+' 岁'+' · '+esc(rootLabel(p))+'</small>'
-    +'<small>每轮静修 '+cultivation(p)+' 修为／轮</small>'+(!p.gift&&i===state.leader?'<label>选择掌门灵根<select data-root><option value="">请选择</option>'+elements.map(e=>option(e,e+'灵根')).join('')+'</select></label>':'')
+  if(characterPanel==='combat')return start+'<section class="rpg-card"><h4>战斗属性</h4><div class="rpg-vitals">'+vitals
+    +'</div></section><section class="rpg-card"><h4>装备槽</h4><div class="rpg-slots">'+equipment+'</div></section>'+end;
+  return start+'<div class="row"><div><small>'+(i===state.leader?'掌门':'弟子')+' · '+p.age+' 岁</small>'
+    +'<small>每轮静修 '+cultivation(p)+' 修为</small>'+(!p.gift&&i===state.leader?'<label>选择掌门灵根<select data-root><option value="">请选择</option>'+elements.map(e=>option(e,e+'灵根')).join('')+'</select></label>':'')
     +'<span class="work-status">'+actorStatus(p,i)+'</span></div>'
     +(j?.repeat?btn('本轮完成后让位','yield','data-token="'+j.id+'"'):idle?btn('安排差事','focus','data-i="'+i+'" class="gold"'):'')+'</div>'
-    +'<div class="rpg-vitals">'+vitals+'</div>'
-    +(!p.rank?'<div class="character-progress"><small>修为 '+p.xp+' / 100</small><div class="meter"><span style="width:'+p.xp+'%"></span></div></div>':'')+'</div></div>'
-    +'<section class="rpg-card"><h4>天赋</h4>'+talentMarkup(p)+'</section>'+dutyMarkup(p,i)+'<section class="rpg-card"><h4>差事熟练度</h4>'
-    +Object.entries(trades).map(([id,[label,effect]])=>{
-      const count=tradeCount(p,id), level=tradeLevel(count);
-      return '<div class="row"><b>'+label+'</b><span>'+tradeRanks[level]
-        +(level<2?' · '+count+'/'+(level===0?5:20):'')+'</span></div><small>'+effect+'（熟练／精通）</small>';
-    }).join('')+'</section>'+mentorshipMarkup(p,i)+btn('安排每日作息','jump','data-value="schedule-page"')
+    +(!p.rank?'<div class="character-progress"><small>修为 '+p.xp+' / 100</small><div class="meter"><span style="width:'+p.xp+'%"></span></div></div>':'')
     +'<section class="rpg-card"><h4>五维属性</h4><div class="character-stats">'
     +p.stats.map((n,k)=>'<div><span>'+attributes[k]+'</span><b>'+n+'</b></div>').join('')+'</div>'+growMarkup(p,i)+'</section>'
-    +'<section class="rpg-card"><h4>装备槽</h4><div class="rpg-slots">'+equipment+'</div></section>'
-    +'<div class="row"><div>'+mainManualsMarkup(p)+'</div>'+btn('查看功法','jump','data-value="manual-page"')+'</div></article></div>';
+    +'<section class="rpg-card"><h4>天赋</h4>'+talentMarkup(p)+'</section>'+end;
 }
+
 function artDescription(p,id){
   const effects={
     guard:'重击前护住自己，本次伤害降低 '+(mastered(p,starterManual,6)?60:50)+'%。',
@@ -2262,16 +2283,38 @@ function mainManualsMarkup(p){
   const slots=mainManuals(p);
   return manualSlots.map(slot=>'<small>'+slot+' · '+esc(slots[slot]??'未主修')+'</small>').join('');
 }
-function manualsMarkup(){
-  const i=selectedCharacter??state.leader,p=state.people[i];
-  const books=[
+const manualBooks=[
     {name:starterManual,category:'修炼功法',grade:'黄阶',art:'guard',intro:'青云宗入门功法，以吐纳凝气护身。',bonus:'静修修为 +10%',master:'静修修为总加成 +20%、护身诀减伤 50% → 60%'},
     ...Object.entries(manuals).map(([id,m])=>({...m,id,grade:'黄阶'})),
     {name:streamManual,grade:'玄阶',art:'stream',intro:'借水势卸力，适合替同门承受重击。',bonus:'灵力上限 +20%、法防 +30%',master:'替同门挡招时额外减伤 25%'}
   ];
+function manualHint(book){
+  return '<button type="button" class="manual-hint-trigger" data-manual-hint="'+manualBooks.indexOf(book)+'">'+esc(book.name)+'</button>';
+}
+function learnedManualsMarkup(p,i,learned){
+  const slots=mainManuals(p);
+  const active=manualSlots.map(slot=>{
+    const book=learned.find(entry=>entry.name===slots[slot]);
+    return '<div class="rpg-card"><small>'+slot+'</small>'+(book?manualHint(book):'<div>未主修</div>')+'</div>';
+  }).join('');
+  const groups=manualSlots.map(slot=>{
+    const rows=learned.filter(book=>manualSlot(book.name)===slot).map(book=>{
+      const points=Math.min(6,p.mastery[book.name]);
+      const current=slots[slot]===book.name;
+      return '<div class="learned-manual-row"><div>'+manualHint(book)+'<small>'+book.grade+' · '+(book.element?book.element+'系':'通用')
+        +' · 熟练度 '+points+'/6'+(current?' · 主修':'')+'</small></div>'
+        +(current?'':btn('设为主修','technique','data-i="'+i+'" data-value="'+esc(book.name)+'"',free(state,i)?'':'修士尚未空闲'))+'</div>';
+    }).join('');
+    return rows?'<section class="rpg-card manual-group"><h4>'+slot+'</h4>'+rows+'</section>':'';
+  }).join('');
+  return '<h4>当前主修</h4><div class="main-manual-grid">'+active+'</div><div class="row"><h4>已学功法</h4>'
+    +btn('前往宗门功法','jump','data-value="manual-page"')+'</div>'+(groups||'<p>尚未学习功法。</p>');
+}
+function manualsMarkup(){
+  const i=selectedCharacter??state.leader,p=state.people[i];
   const filters=(label,values,kind,selected)=>'<div class="task-picks" role="group" aria-label="'+label+'">'
     +'<small>'+label+'</small>'+values.map(value=>btn(value,kind,'data-value="'+value+'" aria-pressed="'+(value===selected)+'"')).join('')+'</div>';
-  const cards=books.filter(book=>
+  const cards=manualBooks.filter(book=>
     (manualCategory==='全部'||(book.category??'战斗功法')===manualCategory)
     &&(manualElement==='全部'||(book.element??'通用')===manualElement)
   ).map(book=>{
@@ -2285,7 +2328,7 @@ function manualsMarkup(){
     const studyJob=jobFor(state,i);
     const studying=!known&&studyJob&&(task==='manual'?studyJob.type===task&&studyJob.arg===book.id:book.name===streamManual&&studyJob.type==='read');
     return '<article class="rpg-card manual-card'+(current?' current':'')+'"><small class="manual-meta">'+book.grade+' · '
-      +(book.element?book.element+'系':'通用')+'</small><h3>'+book.name+'</h3>'
+      +(book.element?book.element+'系':'通用')+'</small><h3>'+manualHint(book)+'</h3>'
       +'<small>'+((book.name===streamManual)?'筑基 · 荒庙残卷':'炼气 · 宗门典籍')+'</small>'
       +'<p>'+book.intro+'</p>'+(book.art?'<div class="manual-art"><small>习得术法</small>'+artDescription(p,book.art)+'</div>':'')
       +(book.bonus?'<small>主修熟练（3） · '+book.bonus+'</small><small>主修圆满（6） · '+book.master+'</small>':'')
@@ -2507,6 +2550,7 @@ function render(){
   clocks();drawAll();
 }
 function showView(name){
+  hideManualHint();
   activeView=name;
   if(name==='schedule')$('schedule-page').innerHTML=scheduleMarkup();
   if(own(assignmentPages,name)){
@@ -2571,6 +2615,12 @@ function handle(e){
   if(kind==='schedule-brush'){scheduleBrush=value;$('schedule-page').innerHTML=scheduleMarkup();clocks();return;}
   if(kind==='schedule-cell'){sync({kind:'schedule',i,n,value:scheduleBrush});return;}
   if(kind==='schedule'){sync({kind,i,value,mode:scheduleBrush});return;}
+  if(kind==='character-panel'){
+    characterPanel=value;
+    $('people').innerHTML=peopleMarkup();
+    $('people').querySelector('[data-kind="character-panel"][aria-pressed="true"]')?.focus({preventScroll:true});
+    return;
+  }
   if(kind==='character'){
     selectedCharacter=i;
     $('people').innerHTML=peopleMarkup();$('manual-page').innerHTML=manualsMarkup();clocks();
@@ -2731,6 +2781,53 @@ function drawAll(time=Date.now()){
 
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync();});
 sync();
+function hideManualHint(){
+  const hint=$('manual-hint');
+  if(hint?.trigger)hint.trigger.removeAttribute('aria-describedby');
+  hint?.remove();
+}
+function showManualHint(trigger){
+  if($('manual-hint')?.trigger===trigger)return;
+  hideManualHint();
+  const book=manualBooks[Number(trigger.dataset.manualHint)];
+  const p=state.people[selectedCharacter??state.leader];
+  const hint=document.createElement('div');
+  hint.id='manual-hint';
+  hint.role='tooltip';
+  hint.trigger=trigger;
+  hint.innerHTML='<strong>'+esc(book.name)+'</strong><small>'+esc(book.intro)+'</small>'
+    +(book.bonus?'<small>主修熟练（3） · '+esc(book.bonus)+'</small>':'')
+    +(book.master?'<small>主修圆满（6） · '+esc(book.master)+'</small>':'')
+    +(book.art?'<small>习得术法</small>'+artDescription(p,book.art):'');
+  document.body.append(hint);
+  trigger.setAttribute('aria-describedby',hint.id);
+  const r=trigger.getBoundingClientRect(),w=hint.offsetWidth,h=hint.offsetHeight;
+  hint.style.left=Math.max(12,Math.min(r.left,innerWidth-w-12))+'px';
+  hint.style.top=Math.max(8,r.bottom+h+16<=innerHeight?r.bottom+8:r.top-h-8)+'px';
+}
+document.addEventListener('pointerover',event=>{
+  const trigger=event.target.closest('[data-manual-hint]');
+  if(trigger&&event.pointerType!=='touch')showManualHint(trigger);
+});
+document.addEventListener('pointerout',event=>{
+  const trigger=$('manual-hint')?.trigger;
+  if(trigger?.contains(event.target)&&!trigger.contains(event.relatedTarget))hideManualHint();
+});
+document.addEventListener('focusin',event=>{
+  const trigger=event.target.closest('[data-manual-hint]');
+  if(trigger)showManualHint(trigger);
+});
+document.addEventListener('focusout',event=>{
+  if(event.target===$('manual-hint')?.trigger)hideManualHint();
+});
+document.addEventListener('click',event=>{
+  const trigger=event.target.closest('[data-manual-hint]');
+  if(trigger)showManualHint(trigger);
+  else hideManualHint();
+});
+document.addEventListener('keydown',event=>{if(event.key==='Escape')hideManualHint();});
+window.addEventListener('resize',hideManualHint);
+window.addEventListener('scroll',hideManualHint,true);
 setInterval(()=>{sync();clocks();drawAll();},500);
 </script>
 </html>
