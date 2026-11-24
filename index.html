@@ -136,10 +136,16 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
 #manual-hint{position:fixed;z-index:1000;pointer-events:none;width:max-content;max-width:min(340px,calc(100vw - 24px));padding:11px 14px;background:var(--surface);color:var(--ink);border:1px solid var(--edge);border-radius:8px;box-shadow:0 6px 22px #283a2938;font-size:15px;line-height:1.5}
 #manual-hint small{display:block;margin-top:3px}
 .guide-intro{margin:8px 0 0}.guide-quick{margin-top:12px}.guide-quick p{margin:0 0 8px}.guide-quick .actions{margin:0}#new-player-guide{width:min(720px,calc(100% - 24px))}#new-player-guide details{margin-top:8px;padding:8px 12px;border:1px solid var(--line);border-radius:8px}#new-player-guide summary{font-weight:700}#new-player-guide li+li{margin-top:5px}
+#restart-dialog{width:min(460px,calc(100% - 24px))}.restart-button{color:#813929;border-color:#b58173;background:#f4e7de}.restart-button:hover:not(:disabled){background:#ebd4c7}
 </style>
 
 <dialog id="recruit-event" class="town-window" aria-label="招徒名册"></dialog>
 <dialog id="town-window" class="town-window" aria-label="石桥镇"></dialog>
+<dialog id="restart-dialog" class="town-window" aria-labelledby="restart-title">
+  <h2 id="restart-title">重新开局？</h2>
+  <p>确认后会清除当前宗门存档，包括弟子、库存和经营进度，并返回创建掌门界面。</p>
+  <form method="dialog" class="actions"><button autofocus>继续当前存档</button><button type="button" data-kind="confirm-restart" class="restart-button">清除存档并重开</button></form>
+</dialog>
 <dialog id="new-player-guide" class="town-window" aria-labelledby="guide-title">
   <div class="row town-header"><h2 id="guide-title">新手指引</h2><form method="dialog"><button type="submit">关闭指引</button></form></div>
   <p class="guide-intro">第一次接印，可以先安排两件差事，边等结算边熟悉山门。下面的条目可以随时回来查。</p>
@@ -1637,6 +1643,14 @@ function database(){
 }
 function apply(current,command,wall){
   const next=current??readLocal(key)??migrate(readLocal(legacyKey),wall);
+  if(command?.kind==='restart'&&(!next.created||command.generation!==(next.generation??0)))
+    return {next,message:'存档已更新，请重新确认。',write:false};
+  if(command?.kind==='restart'){
+    const restarted=fresh(wall);
+    restarted.revision=next.revision+1;
+    restarted.generation=(next.generation??0)+1;
+    return {next:restarted,message:'',write:true};
+  }
   for(const person of next.people){
     if(person.stats.length>attributes.length){
       person.points=(person.points??0)+Math.max(0,person.stats[5]-3);
@@ -1653,7 +1667,7 @@ function apply(current,command,wall){
   next.stock.masonry??=0;
   for(const manual of Object.values(manuals))if(!next.archive.includes(manual.name))next.archive.push(manual.name);
   let changed=tick(next,wall);
-  const message=command?dispatch(next,command):'';
+  const message=command&&command.generation!==(next.generation??0)?'存档已重开，请重新操作。':command?dispatch(next,command):'';
   if(next.created)annualRecruit(next);
   if(command&&!message&&next.created)changed=assignDuties(next)||changed;
   if(command&&!message){
@@ -1689,13 +1703,17 @@ async function transaction(command){
     const fallback=current??(temporary?structuredClone(state):null);
     const result=apply(fallback,command,Date.now());
     try{if(result.write)localStorage.setItem(key,JSON.stringify(result.next));}
-    catch{temporary=true;}
+    catch{
+      if(command?.kind==='restart')return {next:state,message:'存档无法重置，请重试。'};
+      temporary=true;
+    }
     return result;
   };
   if(navigator.locks)return navigator.locks.request(key,update);
   return update();
 }
 async function sync(command){
+  if(command&&command.generation===undefined)command={...command,generation:state.generation??0};
   if(busy&&!command)return;
   if(command&&busy){
     await busy;
@@ -1705,7 +1723,24 @@ async function sync(command){
   busy=pending;
   try{
     const {next,message}=await pending;
+    const restarted=state.created&&!next.created;
     state=next;
+    if(restarted){
+      for(const dialog of document.querySelectorAll('dialog[open]'))dialog.close();
+      popup?.close();
+      overlay?.remove();
+      overlay=null;
+      draft={stats:[3,3,3,3,3]};
+      assignment={task:'meditate',leader:'',partner:[],pack:0,repeat:false};
+      formation={};
+      eventActors={};
+      activeView='overview';
+      selectedCharacter=null;
+      characterPanel='overview';
+      selectedTile=3;
+      chooseBuilding('study');
+      $('start-screen').replaceChildren();
+    }
     const signature=state.revision+'|'+season(state)+'|'+gameHour(state)+'|'+state.people.map((p,i)=>free(state,i)?1:0).join('');
     if(signature!==lastSignature||command){lastSignature=signature;render();}
     if(command&&channel&&!message)channel.postMessage(state.revision);
@@ -2528,7 +2563,7 @@ function render(){
     +(waiting?btn('处理事件 · '+waiting,'view','data-value="events"'):'')+'</div>'
     +'<section class="rpg-card guide-quick"><p><b>第一次接印</b> · 先让掌门静修，让阿禾照料药圃。</p><div class="actions">'
     +'<button type="button" data-kind="guide-go" data-value="dispatch" data-site="study" data-task="meditate">安排静修</button><button type="button" data-kind="guide-go" data-value="dispatch" data-site="farm" data-task="farm">安排种药</button>'+btn('新手指引','open-guide')
-    +'</div></section></div>';
+    +'</div></section><div class="actions">'+btn('重新开局','ask-restart','class="restart-button"')+'</div></div>';
   $('overview-roster').innerHTML='<h2>山门人手</h2>'+state.people.map((p,i)=>'<div class="row">'
     +'<div class="person-name"><span class="portrait" aria-hidden="true">'+esc(Array.from(p.name)[0])+'</span><div><b>'+esc(p.name)+'</b>'
     +'<small>'+rankName(p)+'</small></div></div><span class="work-status">'+actorStatus(p,i)+'</span>'
@@ -2625,6 +2660,14 @@ function handle(e){
   if(kind==='close-town'){$('town-window').close();return;}
   if(kind==='close'){popup?.close();overlay?.remove();overlay=null;return;}
   if(kind==='jump'){jump(value);return;}
+  if(kind==='ask-restart'){$('restart-dialog').showModal();return;}
+  if(kind==='confirm-restart'){
+    b.disabled=true;
+    const dialog=$('restart-dialog');
+    dialog.close();
+    sync({kind:'restart'}).finally(()=>{b.disabled=false;});
+    return;
+  }
   if(kind==='open-guide'){$('new-player-guide').showModal();return;}
   if(kind==='guide-go'){
     const guide=$('new-player-guide');
