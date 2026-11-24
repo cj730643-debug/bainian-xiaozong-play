@@ -302,6 +302,8 @@ const townJobs={
   hunt:{label:'清剿白尾山猿',rep:0,stone:4,gain:2},
   caravan:{label:'长途商队护送',rep:4,stone:5,gain:2}
 };
+const townLocalTasks=new Set(['trade','town','recruit']);
+const isTownTask=type=>townLocalTasks.has(type)||own(townJobs,type);
 const townRep=s=>s.flags.stonebridgeRep??0;
 const tasks = {
   watch:['山门值守',2],fortify:['加固山门',3],
@@ -512,6 +514,8 @@ function annualRecruit(s){
   return s.annualRecruit={year:year(s),limit,candidates,chosen:[],listed:false};
 }
 function recruitChoiceReason(s,plan,index){
+  const access=townServiceReason(s);
+  if(access)return access;
   if(!plan?.listed||plan.year!==year(s))return '请先派人带回今年的名册。';
   if(!plan.candidates[index]||plan.chosen.includes(index))return '该候选人不可招收。';
   if(plan.chosen.length>=plan.limit)return '今年的招徒名额已用完。';
@@ -608,6 +612,8 @@ function jobSpec(s,type,ids,arg='',pack=0){
   const members=ids.map(i=>s.people[i]), leader=ids[0], p=members[0];
   const fail=reason=>({reason});
   if(!s.created||!own(tasks,type)||!p||new Set(ids).size!==ids.length||members.some(x=>!x))return fail('请选择有效人选。');
+  if(isTownTask(type)&&(ids.length!==1||s.townVisit?.person!==leader))return fail('由当前抵达石桥镇的弟子执行。');
+  if(!isTownTask(type)&&ids.includes(s.townVisit?.person))return fail('在石桥镇的弟子需先返回山门。');
   if(ids.length>1&&!groupTravel.has(type)&&!['teach','winter','transmit','apprentice','watch'].includes(type))return fail('这项差事只需一人。');
   if(['teach','winter','transmit','apprentice'].includes(type)&&ids.length!==2)return fail('请选择授课者和后辈。');
   const tired=ids.find(i=>restingForFatigue(s,s.people[i]));
@@ -616,7 +622,7 @@ function jobSpec(s,type,ids,arg='',pack=0){
   if(blocked!==undefined)return fail(s.people[blocked].name+'尚未空闲。');
   const current=type=>s.jobs.some(j=>j.type===type);
   let [label,duration]=tasks[type], cost={},useReserve=false;
-  if(travel.has(type)&&!industries[arg]?.local)cost={food:2*ids.length,...(pack?{heal:pack}:{})};
+  if(travel.has(type)&&!townLocalTasks.has(type)&&!industries[arg]?.local)cost={food:2*ids.length,...(pack?{heal:pack}:{})};
   if(!Number.isInteger(pack)||pack<0||pack>2||pack&&!['seek','hill','patrol','rain','ape','temple','canal','outer'].includes(type))return fail('行囊配置无效。');
   if(study.has(type)&&studyOccupied(s)>=studyCapacity(s))return fail('静室已满，可安排本轮结束后让位。');
   if(type==='manual'&&s.jobs.some(j=>j.type==='manual'))return fail('藏经处已有一人正在学习功法。');
@@ -743,7 +749,7 @@ function jobSpec(s,type,ids,arg='',pack=0){
     case 'trade': {
       const autumn=season(s)===2&&s.seasonClaims.autumn!==year(s);
       if(current('trade'))return fail('已有一人前往石桥镇交易。');
-      cost={food:2,herbs:2};arg=autumn?'autumn':'plain';break;
+      cost={herbs:2};arg=autumn?'autumn':'plain';break;
     }
     case 'winter':
       if(season(s)!==3||s.seasonClaims.winter===year(s))return fail('围炉讲法每年冬季限一次。');
@@ -769,7 +775,7 @@ function start(s,type,ids,arg='',pack=0,repeat=false){
   s.jobs=s.jobs.filter(j=>!j.leisure||!j.people.some(i=>ids.includes(i)));
   spend(s,spec.cost,spec.useReserve);
   const departingTown=s.townVisit?.person;
-  if(ids.includes(departingTown))delete s.townVisit;
+  if(ids.includes(departingTown)&&!townLocalTasks.has(type))delete s.townVisit;
   if(type==='trade'&&spec.arg==='autumn')s.seasonClaims.autumn=year(s);
   if(type==='winter')s.seasonClaims.winter=year(s);
   s.jobs.push({id:++s.serial,type,people:ids,started:s.time,townOrigin:ids.includes(departingTown)?departingTown:null,qiBonus:takeQi(s,s.people[ids[0]],type),arg:spec.arg,pack,route:spec.route,end:s.time+(spec.route?.total??spec.duration*minute),
@@ -1378,6 +1384,7 @@ function dispatch(s,a){
     }
     case 'leave-town':{
       if(!s.townVisit)return '无人留在石桥镇。';
+      if(jobFor(s,s.townVisit.person))return '请等镇内差事结束再返回。';
       const ids=[s.townVisit.person];
       const route=travelPlan(s,'returnRoad',ids,'',0);
       delete s.townVisit;beginReturn(s,ids,route);return;
@@ -1399,6 +1406,7 @@ function dispatch(s,a){
     }
     case 'sign-supply':
       if(!s.created)return '请先接掌宗门。';
+      if(townServiceReason(s))return townServiceReason(s);
       if(s.supplyContract?.remaining)return '已有供药契约履行中。';
       s.supplyContract={remaining:supplyTerms.seasons,delivered:0};
       log(s,'与石桥镇签订两季供药契约。');
@@ -1633,7 +1641,7 @@ function travelPlan(s,type,ids,arg,work){
   const slowest=ids.reduce((a,b)=>walkingSpeed(s.people[b])<walkingSpeed(s.people[a])?b:a);
   const speed=walkingSpeed(s.people[slowest]);
   const duration=path=>Math.ceil(pathMiles(path)*scheduleHour/speed);
-  const go=duration(outward),back=type==='visitTown'||type==='returnRoad'?0:duration(home);
+  const go=duration(outward),back=type==='visitTown'||type==='returnRoad'||townLocalTasks.has(type)?0:duration(home);
   const waiting=['ape','hunt'].includes(type)||type==='seek'&&!s.flags.trail||type==='rain'&&!s.seenEvents.includes('ford');
   const workTime=type==='visitTown'?0:work;
   return {outward,home,go,back,work:workTime,total:go+workTime+(waiting?0:back),slowest};
@@ -1646,6 +1654,7 @@ function beginReturn(s,ids,route){
 }
 function routeText(s,route,total){
   const seconds=ms=>Math.ceil(ms/1000)+' 秒';
+  if(route&&!route.go&&!route.back)return '镇内办事 '+seconds(route.work);
   return route?'去程 '+pathMiles(route.outward)+' 里／'+seconds(route.go)
     +(route.work?' · 办事 '+seconds(route.work):'')+(route.back?' · 回程 '+seconds(route.back):'')
     +' · 速度按 '+s.people[route.slowest].name:total+' 分钟';
@@ -1760,6 +1769,7 @@ function taskChoices(){
 }
 function assignmentCommand(){
   const [task,arg='']=assignment.task.split('.');
+  if(isTownTask(task))return {kind:'start',task,arg,ids:state.townVisit?[state.townVisit.person]:[],pack:0,repeat:false};
   const ids=assignment.leader===''?[]:[Number(assignment.leader)];
   if(ids.length)ids.push(...assignment.partner.filter(i=>i!==ids[0]));
   return {kind:'start',task,arg,ids,pack:Number(assignment.pack),repeat:assignment.repeat};
@@ -1772,7 +1782,14 @@ function chooseBuilding(id,task){
   assignment.pack=0;
   assignment.repeat=false;
 }
+function townServiceReason(s){
+  const i=s.townVisit?.person;
+  if(i===undefined)return '请先派弟子抵达石桥镇。';
+  return jobFor(s,i)?'在镇弟子正在办事。':'';
+}
 function marketReason(s,offer){
+  const access=townServiceReason(s);
+  if(access)return access;
   if(offer.season!==undefined&&season(s)!==offer.season)return '仅在'+seasons[offer.season]+'季开放';
   if(offer.rep&&townRep(s)<offer.rep)return '需要石桥镇声望 '+offer.rep;
   if(offer.claim&&s.seasonClaims[offer.claim]===year(s))return '本年已完成';
@@ -1808,7 +1825,7 @@ function recruitmentMarkup(s){
   if(!plan?.listed){
     const visit=s.jobs.find(j=>j.type==='recruit');
     return html+'<p>今年名额 '+(plan?.limit??0)+' · '+(visit?'访徒中 · '+clock(visit.end)
-      :'选择下方「赴石桥镇访徒」，派一名弟子出发。')+'</p></section>';
+      :'选择下方「赴石桥镇访徒」，由在镇弟子办理。')+'</p></section>';
   }
   html+='<p>第 '+plan.year+' 年 · 已收 '+plan.chosen.length+'/'+plan.limit
     +' · 空床 '+Math.max(0,capacity(s)-s.people.length)+'</p><small>每人安家费 3 口粮，入门后每季多支出 2 口粮。</small>';
@@ -1864,7 +1881,7 @@ function refreshTownWindow(){
     seenTownVisit=visit.id;chooseBuilding('town');assignment.leader=String(visit.person);selectedPersonExplicitly=true;dialog.showModal();
   }
   if(dialog.open)dialog.innerHTML='<div class="row town-header"><h2>石桥镇</h2><div class="actions">'
-    +btn('返回山门','leave-town')+btn('关闭窗口','close-town')+'</div></div>'
+    +btn('返回山门','leave-town','',jobFor(state,visit.person)?'请等镇内差事结束':'')+btn('关闭窗口','close-town')+'</div></div>'
     +'<p>'+esc(state.people[visit.person].name)+'已抵达</p>'+assignmentPanel();
 }
 function assignmentMarkup(){
@@ -1965,7 +1982,7 @@ function assignmentPanel(){
   const bag=['seek','hill','patrol','rain','ape','temple','canal','outer'].includes(command.task);
   const repeat=['farm','meditate'].includes(command.task);
   return html+'<div class="task-picks">'+choices.map(id=>btn(taskLabel(id),'task','data-value="'+id+'" aria-pressed="'+(id===assignment.task)+'"')).join('')
-    +'</div>'+dispatchPicker(team)+(team&&assignment.partner.length?'<div class="actions">'+assignment.partner.map(i=>btn('由'+state.people[i].name+'领队','pick-leader','data-i="'+i+'"',free(state,i)?'':'弟子正忙')).join('')+'</div>':'')+'<div class="form-grid">'
+    +'</div>'+(selectedBuilding==='town'?'<p class="muted">执行者 · '+esc(state.people[state.townVisit?.person]?.name??'等待抵达')+'</p>':dispatchPicker(team))+(selectedBuilding!=='town'&&team&&assignment.partner.length?'<div class="actions">'+assignment.partner.map(i=>btn('由'+state.people[i].name+'领队','pick-leader','data-i="'+i+'"',free(state,i)?'':'弟子正忙')).join('')+'</div>':'')+'<div class="form-grid">'
     +(lesson?'<label>后辈<select data-lesson>'+option('','请选择',!assignment.partner.length)+state.people.map((p,i)=>
       String(i)===assignment.leader?'':option(i,p.name,i===assignment.partner[0])).join('')+'</select></label>':'')
     +(bag?'<label>携带疗伤丹<select data-field="pack">'+[0,1,2].map(n=>option(n,n,Number(assignment.pack)===n)).join('')+'</select></label>':'')
