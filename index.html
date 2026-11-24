@@ -137,6 +137,7 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
 #manual-hint small{display:block;margin-top:3px}
 .guide-intro{margin:8px 0 0}.guide-quick{margin-top:12px}.guide-quick p{margin:0 0 8px}.guide-quick .actions{margin:0}#new-player-guide{width:min(720px,calc(100% - 24px))}#new-player-guide details{margin-top:8px;padding:8px 12px;border:1px solid var(--line);border-radius:8px}#new-player-guide summary{font-weight:700}#new-player-guide li+li{margin-top:5px}
 #restart-dialog{width:min(460px,calc(100% - 24px))}.restart-button{color:#813929;border-color:#b58173;background:#f4e7de}.restart-button:hover:not(:disabled){background:#ebd4c7}
+.division-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}.division-list article>p{margin:8px 0}.division-list .actions{margin-top:10px}.week-report{margin:8px 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px}.week-report summary{font-weight:700}.week-report ul{padding-inline-start:1.35em}
 </style>
 
 <dialog id="recruit-event" class="town-window" aria-label="招徒名册"></dialog>
@@ -170,6 +171,8 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
       <button type="button" data-kind="view" data-value="dispatch">建筑</button>
       <button type="button" data-kind="view" data-value="map">地图</button>
       <button type="button" data-kind="view" data-value="people">人物</button>
+      <button type="button" data-kind="view" data-value="division">弟子分工</button>
+      <button type="button" data-kind="view" data-value="weekly">山门周报</button>
       <button type="button" data-kind="view" data-value="schedule">作息</button>
       <button type="button" data-kind="view" data-value="manuals">功法</button>
       <button type="button" data-kind="view" data-value="events">事件与战斗 <span id="event-count" class="nav-count" hidden></span></button>
@@ -185,6 +188,8 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
       <div class="view" id="building-page" data-view="dispatch" hidden><section id="assignments" class="panel" tabindex="-1"></section></div>
       <div class="view" id="map-page" data-view="map" hidden></div>
       <div class="view" data-view="people" hidden><section class="panel"><h2>人物档案</h2><div id="people"></div></section></div>
+      <div class="view" data-view="division" hidden><section class="panel" id="division-page"></section></div>
+      <div class="view" data-view="weekly" hidden><section class="panel" id="weekly-page"></section></div>
       <div class="view" data-view="schedule" hidden><section id="schedule-page" class="panel" tabindex="-1"></section></div>
       <div class="view" data-view="manuals" hidden><section id="manual-page" class="panel" tabindex="-1"></section></div>
       <div class="view" data-view="events" hidden>
@@ -643,7 +648,36 @@ function recruitChoiceReason(s,plan,index){
   if(s.people.length>=capacity(s))return '厢房没有空位。';
   return missing(s,recruitCost);
 }
+function beginWeek(s){
+  s.weekly??={reports:[],current:null};
+  s.weekly.current??={week:Math.floor(calendarTime(s)/seasonLength),food:s.stock.food,
+    ranks:s.people.map(rankName),breakthroughs:[],blocked:{}};
+  return s.weekly.current;
+}
+function trackWeekRanks(s){
+  const week=beginWeek(s);
+  s.people.forEach((p,i)=>{
+    const rank=rankName(p), previous=week.ranks[i];
+    if(previous&&previous!==rank)week.breakthroughs.push(p.name+' · '+previous+' → '+rank);
+    week.ranks[i]=rank;
+  });
+}
+function trackWeekWaits(s,time){
+  const week=beginWeek(s),duration=time-s.time;
+  if(duration<=0)return;
+  s.people.forEach((p,i)=>{
+    if(!free(s,i)||jobFor(s,i))return;
+    const mode=scheduleMode(s,p);
+    if(['rest','free'].includes(mode))return;
+    const reason=scheduleWaitReason(s,i);
+    if(!/已满|不足|^需先|尚未建成|缺/.test(reason))return;
+    const label=p.name+' · '+reason.replace(/缺\s*\d+/g,'不足');
+    week.blocked[label]=(week.blocked[label]??0)+duration;
+  });
+}
 function advanceClock(s,time){
+  trackWeekRanks(s);
+  trackWeekWaits(s,time);
   const before=Math.floor(calendarTime(s)/seasonLength);
   const changed=advanceFatigue(s,time);
   const after=Math.floor(calendarTime(s)/seasonLength);
@@ -654,6 +688,11 @@ function advanceClock(s,time){
   const paid=Math.min(s.stock.food,due);
   s.stock.food-=paid;
   s.lastFoodBill={paid,due};
+  const {week,food,breakthroughs,blocked}=s.weekly.current;
+  s.weekly.reports.unshift({week,foodDelta:s.stock.food-food,breakthroughs,blocked});
+  s.weekly.reports.length=Math.min(4,s.weekly.reports.length);
+  s.weekly.current=null;
+  beginWeek(s);
   log(s,seasons[season(s)]+'季账房 · 支出口粮 '+paid+'/'+due+(paid<due?'，缺 '+(due-paid)+'。':'。'));
   return true;
 }
@@ -1668,8 +1707,8 @@ function apply(current,command,wall){
   for(const manual of Object.values(manuals))if(!next.archive.includes(manual.name))next.archive.push(manual.name);
   let changed=tick(next,wall);
   const message=command&&command.generation!==(next.generation??0)?'存档已重开，请重新操作。':command?dispatch(next,command):'';
-  if(next.created)annualRecruit(next);
-  if(command&&!message&&next.created)changed=assignDuties(next)||changed;
+  if(next.created){annualRecruit(next);trackWeekRanks(next);}
+  if(command&&!message&&next.created){beginWeek(next);changed=assignDuties(next)||changed;}
   if(command&&!message){
     if(command.kind==='create')next.wall=Math.max(next.wall,wall);
     next.revision++;
@@ -2598,9 +2637,44 @@ function render(){
   }
   clocks();drawAll();
 }
+function divisionMarkup(){
+  return '<h2>弟子分工</h2><div class="division-list">'+state.people.map((p,i)=>{
+    const top=Object.keys(trades).sort((a,b)=>tradeCount(p,b)-tradeCount(p,a))[0];
+    const count=tradeCount(p,top);
+    return '<article class="rpg-card"><div class="row"><h3>'+esc(p.name)+'</h3><small>'+rankName(p)+'</small></div>'
+      +'<p>职务 · '+(duties[p.duty]?.[0]??'未安排')+(p.dutyPaused?'（暂停）':'')+'</p>'
+      +'<p>熟练度 · '+(count?trades[top][0]+' '+tradeRanks[tradeLevel(count)]+'（'+count+'）':'暂无专长')+'</p>'
+      +talentMarkup(p)+'<p>'+actorStatus(p,i)+'</p><div class="actions">'
+      +btn('调整作息','division-person','data-i="'+i+'" data-value="schedule"')
+      +btn('调整职务','division-person','data-i="'+i+'" data-value="people"')+'</div></article>';
+  }).join('')+'</div>';
+}
+function weeklyMarkup(){
+  const current=state.weekly?.current;
+  const reports=state.weekly?.reports??[];
+  const formatDelta=n=>n===0?'无变化':(n>0?'+':'')+n;
+  return '<h2>山门周报</h2><p>每个游戏周为七天。换季时结算，并计入本次换季口粮。</p>'
+    +(current?'<p>本周口粮净变化 <b>'+formatDelta(state.stock.food-current.food)+'</b></p>':'')
+    +(reports.length?reports.map(({week,foodDelta,breakthroughs,blocked},i)=>{
+      const waits=Object.entries(blocked).sort((a,b)=>b[1]-a[1]);
+      const items=rows=>rows.length?'<ul>'+rows.map(label=>'<li>'+esc(label)+'</li>').join('')+'</ul>':'';
+      return '<details class="week-report" data-week="'+week+'" '+(i===0?'open':'')+'>'
+        +'<summary>第 '+(Math.floor(week/4)+1)+' 年 · '+seasons[week%4]+'季 · 口粮 '+formatDelta(foodDelta)+'</summary>'
+        +'<p><b>境界突破</b>'+(!breakthroughs.length?' · 无':'')+'</p>'+items(breakthroughs)
+        +'<p><b>排班受阻</b>'+(!waits.length?' · 无':'')+'</p>'
+        +items(waits.map(([reason,ms])=>reason+' · '+(ms/scheduleHour<0.1?'< 0.1':(ms/scheduleHour).toFixed(1))+' 游戏小时'))+'</details>';
+    }).join(''):'<p>首份周报将在本周结束时生成。</p>');
+}
 function showView(name){
   hideManualHint();
   activeView=name;
+  if(name==='division')$('division-page').innerHTML=divisionMarkup();
+  if(name==='weekly'){
+    const page=$('weekly-page');
+    const previous=new Map([...page.querySelectorAll('[data-week]')].map(item=>[item.dataset.week,item.open]));
+    page.innerHTML=weeklyMarkup();
+    for(const item of page.querySelectorAll('[data-week]'))if(previous.has(item.dataset.week))item.open=previous.get(item.dataset.week);
+  }
   if(name==='schedule')$('schedule-page').innerHTML=scheduleMarkup();
   if(own(assignmentPages,name)){
     const page=assignmentPages[name];
@@ -2666,6 +2740,12 @@ function handle(e){
     const dialog=$('restart-dialog');
     dialog.close();
     sync({kind:'restart'}).finally(()=>{b.disabled=false;});
+    return;
+  }
+  if(kind==='division-person'){
+    selectedCharacter=i;
+    if(value==='people'){characterPanel='duties';$('people').innerHTML=peopleMarkup();}
+    showView(value);clocks();
     return;
   }
   if(kind==='open-guide'){$('new-player-guide').showModal();return;}
