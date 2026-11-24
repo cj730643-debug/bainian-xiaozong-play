@@ -85,6 +85,7 @@ header{height:75px;display:flex;align-items:center;justify-content:space-between
 .map-details{min-width:0;max-height:min(76vh,760px);overflow:auto;padding:12px;border:1px solid var(--line);border-radius:10px;background:#192a21}
 .map-details .form-grid{grid-template-columns:minmax(0,1fr)}.map-details .task-form{padding:10px}.map-legend{color:var(--muted);font-size:13px;margin:8px 0}
 @media(max-width:850px){.map-layout{grid-template-columns:minmax(0,1fr)}.map-details{max-height:none}}
+.battlefield-scroll{overflow-x:auto}.battlefield{display:grid;gap:6px;margin:8px 0 16px}.battlefield-row{display:grid;grid-template-columns:4em repeat(var(--battle-cols),minmax(60px,1fr));gap:5px;align-items:stretch}.battlefield-row>small{align-self:center}.battle-cell{min-height:44px;padding:4px;display:grid;place-items:center;border:1px solid #526756;border-radius:6px;background:#23372b;text-align:center;font-size:13px;overflow-wrap:anywhere}.battle-cell.enemy{background:#332720;border-color:#644a3c}.battle-cell.chosen{border-color:var(--gold);color:var(--gold)}.battle-cell.down{opacity:.55}
 </style>
 
 <main id="app">
@@ -1058,7 +1059,7 @@ function hitEnemy(b,power,kind='physical'){
   b.shield=(b.shield||0)-absorbed;b.enemy-=damage-absorbed;return damage-absorbed;
 }
 
-const formationWidth=count=>Math.max(3,Math.ceil(count/2));
+const formationWidth=count=>Math.max(6,Math.ceil(count/2));
 function enemyHealth(s,id){return enemies[id].hp-(id==='gateWolf'&&s.flags.gateFortified?20:0);}
 function battleStart(s,token,formation){
   const e=s.eventQueue.find(e=>e.token===token&&own(enemies,e.id));
@@ -1866,13 +1867,43 @@ function eventCard(e,mini=false){
       return btn(c.label+(effects?' · '+effects:'')+(reason?' · '+reason:''),'event','data-token="'+e.token+'" data-n="'+n+'" data-i="'+i+'"',reason);
     }).join('')+(own(enemies,e.id)?btn('打开布阵','jump','data-value="battle"'):'')+'</div>';
 }
+let boardSelection=null;
+function battlefieldMarkup(team,width,enemy,token,editable){
+  const selected=editable&&boardSelection?.token===token?boardSelection.index:null;
+  const rows=['敌方后排','敌方前排','我方前排','我方后排'];
+  return (editable?'<p><small>先点上阵弟子，再点目标格。目标格有人时交换站位。</small></p>':'')
+    +'<div class="battlefield-scroll"><div class="battlefield" style="--battle-cols:'+width+'">'
+    +rows.map((label,row)=>'<div class="battlefield-row"><small>'+label+'</small>'
+      +Array.from({length:width},(_,col)=>{
+        if(row<2)return '<div class="battle-cell enemy">'+(row===1&&col===Math.floor((width-1)/2)?esc(enemy.name):'·')+'</div>';
+        const slot=(row-2)*width+col;
+        const index=team.findIndex(f=>f.selected!==false&&f.slot===slot);
+        const f=team[index],name=f?esc(state.people[f.i].name):'·';
+        const classes='battle-cell'+(selected!==null&&index===selected?' chosen':'')+(f?.down?' down':'');
+        const label=rows[row]+' '+(col+1)+(f?' '+name:' 空位');
+        return editable?'<button type="button" class="'+classes+'" data-kind="battle-cell" data-token="'+token
+          +'" data-n="'+slot+'" aria-label="'+label+'" aria-pressed="'+(selected!==null&&index===selected)+'">'+name+'</button>'
+          :'<div class="'+classes+'" aria-label="'+label+'">'+name+(f?.down?' · 倒地':'')+'</div>';
+      }).join('')+'</div>').join('')+'</div></div>';
+}
+function selectBattleCell(token,slot){
+  const team=formation[token];
+  if(!team)return;
+  const index=team.findIndex(f=>f.selected&&f.slot===slot);
+  const chosen=boardSelection?.token===token?team[boardSelection.index]:null;
+  if(chosen?.selected){
+    if(index>=0)team[index].slot=chosen.slot;
+    chosen.slot=slot;
+    boardSelection=null;
+  }else if(index>=0)boardSelection={token,index};
+}
 function battleMarkup(){
   const e=state.eventQueue.find(a=>own(enemies,a.id));
   const b=state.battle;
   if(b){
     const enemy=enemies[b.enemyId];
     return '<h2>'+enemy.name+'之战 · 第 '+b.round+' 轮</h2><p>'+enemy.name+'气血 '+b.enemy+'/'+enemyHealth(state,b.enemyId)+(b.shield?' · 护盾 '+b.shield:'')+'</p><div class="stats">'
-      +b.team.map(f=>'<span>'+esc(state.people[f.i].name)+' '+f.hp+'/'+f.maxHp+' 气血 · '+f.mp+' 灵力</span>').join('')+'</div>'
+      +b.team.map(f=>'<span>'+esc(state.people[f.i].name)+' '+f.hp+'/'+f.maxHp+' 气血 · '+f.mp+' 灵力</span>').join('')+'</div>'+battlefieldMarkup(b.team,b.width??3,enemy,b.token,false)
       +'<p>'+esc(b.lines.at(-1)??'队伍已布阵。')+'</p>'+btn('撤退','retreat','data-token="'+b.token+'"');
   }
   if(!e){
@@ -1885,10 +1916,7 @@ function battleMarkup(){
   const slots=Array.from({length:2*width},(_,n)=>(n<width?'前排':'后排')+' '+(n%width+1));
   const enemy=enemies[e.id];
   return '<h2>布阵 · '+enemy.name+'</h2><p>气血 '+enemyHealth(state,e.id)+' · 身法 '+enemy.speed+' · '+enemy.brief+'</p>'
-    +'<div class="formation" style="grid-template-columns:repeat('+width+',minmax(0,1fr))">'+slots.map((name,n)=>{
-      const k=current.findIndex(f=>f.selected&&f.slot===n);
-      return '<div><small>'+name+'</small>'+ (k===-1?'空位':esc(state.people[e.people[k]].name))+'</div>';
-    }).join('')+'</div>'+e.people.map((i,k)=>{
+    +battlefieldMarkup(current,width,enemy,e.token,true)+e.people.map((i,k)=>{
       const p=state.people[i],f=current[k];
       return '<div class="row"><b>'+esc(p.name)+' · 速度 '+combatStats(p).speed+'</b><div class="actions"><label class="check"><input type="checkbox" data-form="selected" data-token="'+e.token+'" data-n="'+k+'" '+(f.selected?'checked':'')+'> 上阵</label><label>站位<select data-form="slot" data-token="'+e.token+'" data-n="'+k+'">'
         +slots.map((name,n)=>option(n,name,n===f.slot)).join('')+'</select></label>'
@@ -2091,6 +2119,11 @@ function handle(e){
   if(kind==='study-book'){sync({kind:'start',task:value==='stream'?'read':'manual',arg:value,ids:[i]});return;}
   if(kind==='assign'){sync(assignmentCommand());return;}
   if(kind==='quick'){sync({kind:'start',task:value,ids:[i],repeat:value!=='hill'});return;}
+  if(kind==='battle-cell'){
+    selectBattleCell(token,n);render();
+    $('battle').querySelector('[data-kind="battle-cell"][data-n="'+n+'"]')?.focus({preventScroll:true});
+    return;
+  }
   if(kind==='battle'){sync({kind,token,formation:structuredClone(formation[token].filter(f=>f.selected))});return;}
   sync({kind,value,i,n,token});
 }
