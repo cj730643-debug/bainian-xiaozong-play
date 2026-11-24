@@ -1819,13 +1819,18 @@ function marketMarkup(){
 }
 function recruitmentMarkup(s){
   const plan=s.annualRecruit?.year===year(s)?s.annualRecruit:null;
-  let html='<section class="task-form"><h3>年度招徒</h3>';
+  let html='<section id="town-recruitment" class="task-form"><h3>年度招徒</h3>';
   const locked=recruitUnlock(s);
   if(locked)return html+'<p class="muted">'+locked+'</p></section>';
   if(!plan?.listed){
     const visit=s.jobs.find(j=>j.type==='recruit');
-    return html+'<p>今年名额 '+(plan?.limit??0)+' · '+(visit?'访徒中 · '+clock(visit.end)
-      :'选择下方「赴石桥镇访徒」，由在镇弟子办理。')+'</p></section>';
+    const i=s.townVisit?.person;
+    const spec=jobSpec(s,'recruit',i===undefined?[]:[i]);
+    return html+'<p>今年名额 '+(plan?.limit??0)+'</p>'
+      +(visit?'<p>访徒中 · '+clock(visit.end)+'</p>'
+        :btn('开始访徒 · 3 分钟','town-recruit','class="gold"',spec.reason)
+          +(spec.reason?'<small>'+esc(spec.reason)+'</small>':''))
+      +'</section>';
   }
   html+='<p>第 '+plan.year+' 年 · 已收 '+plan.chosen.length+'/'+plan.limit
     +' · 空床 '+Math.max(0,capacity(s)-s.people.length)+'</p><small>每人安家费 3 口粮，入门后每季多支出 2 口粮。</small>';
@@ -1864,13 +1869,16 @@ let seenTownVisit=null;
 function townApproachMarkup(){
   const visit=state.townVisit, walking=state.jobs.find(j=>j.type==='visitTown');
   const head='<h3>石桥镇</h3><p class="muted">坊市、招徒与镇上委托</p>';
-  if(visit)return head+'<p>'+esc(state.people[visit.person].name)+'已抵达</p>'+btn('进入石桥镇','open-town','class="gold"');
+  const recruitStatus=recruitUnlock(state);
+  if(visit)return head+'<p>'+esc(state.people[visit.person].name)+'已抵达</p>'
+    +'<div class="actions">'+btn('年度招徒','open-town','data-value="recruit" class="gold"')+btn('进入石桥镇','open-town')+'</div>'
+    +(recruitStatus?'<small>'+esc(recruitStatus)+'</small>':'');
   if(walking)return head+'<p>'+esc(state.people[walking.people[0]].name)+'在路上 · '+clock(walking.end)+'</p>';
   const i=Number(assignment.leader);
   const chosen=state.people[i]&&assignment.leader!==''?i:state.people.findIndex((_,n)=>free(state,n));
   if(!selectedPersonExplicitly)assignment.leader=chosen<0?'':String(chosen);
   const spec=jobSpec(state,'visitTown',assignment.leader===''?[]:[chosen]);
-  return head+dispatchPicker(false,true)
+  return head+'<small>年度招徒 · '+esc(recruitStatus||'抵达后可访徒')+'</small>'+dispatchPicker(false,true)
     +'<p><small>'+esc(spec.reason||routeText(state,spec.route,spec.duration)+' · 2 口粮')+'</small></p>'
     +btn('前往石桥镇','visit-town','data-i="'+chosen+'" class="gold"',spec.reason);
 }
@@ -2427,7 +2435,18 @@ function handle(e){
     return;
   }
   if(kind==='visit-town'){sync({kind:'start',task:'visitTown',ids:[i]});return;}
-  if(kind==='open-town'){if(state.townVisit){seenTownVisit=state.townVisit.id;chooseBuilding('town');assignment.leader=String(state.townVisit.person);selectedPersonExplicitly=true;$('town-window').showModal();refreshTownWindow();clocks();}return;}
+  if(kind==='town-recruit'){
+    if(state.townVisit)sync({kind:'start',task:'recruit',ids:[state.townVisit.person]});
+    return;
+  }
+  if(kind==='open-town'){
+    if(state.townVisit){
+      seenTownVisit=state.townVisit.id;chooseBuilding('town');assignment.leader=String(state.townVisit.person);selectedPersonExplicitly=true;
+      const dialog=$('town-window');dialog.showModal();refreshTownWindow();dialog.scrollTop=0;clocks();
+      if(value==='recruit')$('town-recruitment')?.scrollIntoView({block:'nearest'});
+    }
+    return;
+  }
   if(kind==='close-town'){$('town-window').close();return;}
   if(kind==='close'){popup?.close();overlay?.remove();overlay=null;return;}
   if(kind==='jump'){jump(value);return;}
