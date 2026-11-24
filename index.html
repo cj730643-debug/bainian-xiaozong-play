@@ -909,6 +909,39 @@ function complete(s,j){
     }
   }
 }
+function scheduledIndustryReason(s,industry){
+  if(!s.flags['industry_'+industry])return '需先整修'+industries[industry].name;
+  if(available(s,'food')<4)return '可动用口粮不足 4';
+  return '';
+}
+function scheduleWaitReason(s,i){
+  const p=s.people[i],mode=scheduleMode(s,p),workMode=mode==='duty'?p.duty:mode;
+  if(p.schedulePaused)return '自动安排已暂停';
+  if(s.townVisit?.person===i)return '在石桥镇，返回山门后继续排班';
+  if(p.dutyPaused&&(mode==='duty'||workMode===p.duty&&own(materialDuties,workMode)))return '职务已暂停';
+  if(own(materialDuties,workMode)){
+    const [id]=materialDuties[workMode];
+    if(plannedMaterial(s,id)>=stockGoal(s,id))return resources[id]+'库存目标已足';
+    return jobSpec(s,'harvest',[i],materialSite(p,workMode)).reason;
+  }
+  if(workMode==='smith'){
+    if(!s.built.workshop)return '炼器工坊尚未建成';
+    const choices=Object.keys(forgeRecipes).filter(id=>s.gear[id]+s.jobs.filter(j=>j.type==='forge'&&j.arg===id).length<stockGoal(s,id));
+    if(!choices.length)return '炼器库存目标已足';
+    return jobSpec(s,'forge',[i],choices[0]).reason;
+  }
+  if(workMode==='heal'){
+    const choices=Object.keys(productionRecipes).filter(id=>needsBrew(s,id));
+    return choices.length?jobSpec(s,choices[0],[i]).reason:'丹药库存目标已足';
+  }
+  const [,,industry]=scheduledWork[workMode]??[];
+  const task=mode==='study'?'meditate':scheduledWork[workMode]?.[1];
+  if(!task)return mode==='duty'?'未安排常驻职务':'';
+  if(industry)return scheduledIndustryReason(s,industry)||jobSpec(s,task,[i],industry).reason;
+  if(task==='patrol'&&available(s,'food')<4)return '可动用口粮不足 4';
+  if(task==='patrol'&&s.jobs.some(j=>j.type==='patrol'))return '已有弟子巡山';
+  return jobSpec(s,task,[i]).reason;
+}
 function assignDuties(s){
   let changed=false;
   const order=s.people.map((p,i)=>({p,i,leisure:scheduleMode(s,p)==='free'}));
@@ -958,7 +991,7 @@ function assignDuties(s){
     const task=recipe||(mode==='study'?'meditate':work?.[1]??duty?.[1]);
     if(!task)return;
     const industry=work?.[2]??(duty&&own(industries,p.duty)?p.duty:null);
-    if(industry&&(!s.flags['industry_'+industry]||available(s,'food')<4))return;
+    if(industry&&scheduledIndustryReason(s,industry))return;
     if(task==='patrol'&&(available(s,'food')<4||s.jobs.some(j=>j.type==='patrol')))return;
     if(!start(s,task,[i],industry??'')){
       jobFor(s,i).duty=!!duty;
@@ -1595,6 +1628,8 @@ function positionMapAvatars(nodes,time){
     node.style.left='calc('+((pos.x+.5)/7*100)+'% + '+shift+'px)';
     node.style.top='calc('+((pos.y+.5)/5*100)+'% - '+lift+'px)';
     node.classList.toggle('is-travelling',pos.moving);
+    const i=Number(node.dataset.mapPerson),p=state.people[i];
+    if(p)node.title=p.name+' · '+(pos.moving?'赶路中':activityStatus(p,i).replace(/<[^>]*>/g,'').replace(/\s*·\s*$/,''));
   }
 }
 function roadMarkup([from,to]){
@@ -1882,6 +1917,7 @@ function actorStatus(p,i){
 function activityStatus(p,i){
   const j=jobFor(state,i);
   if(j)return (restingForFatigue(state,p)?'本轮后休息 · ':j.leisure?'自主 · ':'')+(own(industries,j.arg)?industryAction(j.type,j.arg):j.type==='repair'?repairs[j.arg][0]:j.type==='forge'?'打造'+gearNames[j.arg]:j.type==='manual'?'学习'+manuals[j.arg].name:tasks[j.type][0])+' · '+(j.end===null?'等待处理':clock(j.end));
+  if(state.townVisit?.person===i)return '在石桥镇 · 返回山门后继续排班';
   if(restingForFatigue(state,p))return '疲劳休息 · '+clock(fatigueRecovery(state,p))
     +(p.rest>state.time?' · 受伤休养 '+clock(p.rest):'');
   if(p.rest>state.time)return '休养 · '+clock(p.rest);
@@ -1891,7 +1927,8 @@ function activityStatus(p,i){
     if(mode==='rest')return hour<6||hour>=22?'安睡':'静坐调息';
     if(mode==='free')return p.rank?'在山门散步':'在庭院活动';
   }
-  return '待命';
+  const reason=scheduleWaitReason(state,i);
+  return reason?'待命 · '+esc(reason):'待命';
 }
 function growMarkup(p,i){
   if(!p.points)return '';
@@ -1907,8 +1944,8 @@ function scheduleMarkup(){
       +'" data-mode="'+mode+'" aria-label="'+label+' 时，'+activity+(h===hour?'，当前时段':'')+'"><small>'+label+'</small>'+activity+'</button>';
   }).join('');
   return '<div class="row"><h2>每日作息</h2><label>人物 <select data-schedule-person>'+personOptions(i)+'</select></label></div>'
-    +'<p><b>'+esc(p.name)+'</b> · '+(p.schedulePaused?'自动安排已暂停':scheduleLabel(scheduleMode(state,p),p))
-    +' · '+actorStatus(p,i)+(jobFor(state,i)?.leisureReason?'（'+esc(jobFor(state,i).leisureReason)+'）':'')+'</p>'
+    +'<p><b>'+esc(p.name)+'</b> · 计划 '+(p.schedulePaused?'已暂停':scheduleLabel(scheduleMode(state,p),p))
+    +' · 实际 '+actorStatus(p,i)+(jobFor(state,i)?.leisureReason?'（'+esc(jobFor(state,i).leisureReason)+'）':'')+'</p>'
     +'<p class="muted">现实 30 秒为游戏 1 小时。先选一种活动，再点小时格设置。每天重复，离线照常结算。</p>'
     +'<div class="actions task-picks schedule-palette" aria-label="选择活动">'+Object.entries(schedules).map(([id,label])=>
       btn(label,'schedule-brush','data-value="'+id+'" aria-pressed="'+(id===scheduleBrush)+'"')).join('')+'</div>'
