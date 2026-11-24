@@ -236,7 +236,12 @@ const scheduleLabel=(mode,p)=>mode==='duty'
 const gameHour=s=>Math.floor(s.time/scheduleHour)%24;
 const scheduleMode=(s,p)=>p.schedule?.[gameHour(s)]??'duty';
 const scheduleTemplate=p=>Array.from({length:24},(_,h)=>h<6||h>=22?'rest':h<8?'study':h<18&&scheduledWork[p.duty]&&!p.dutyPaused?p.duty:'free');
-const seasonLength = 15 * minute;
+const dayLength=24*scheduleHour;
+const seasonLength=7*dayLength;
+const yearLength=4*seasonLength;
+const calendarTime=s=>s.time+(s.calendarOffset??0);
+const calendarDay=s=>Math.floor(calendarTime(s)%seasonLength/dayLength)+1;
+const nextSeasonTime=s=>s.time+seasonLength-calendarTime(s)%seasonLength;
 const offlineCap = 240 * minute;
 const attributes = ['根骨','悟性','体魄','身法','神识'];
 const seasons = ['春','夏','秋','冬'];
@@ -401,8 +406,8 @@ function migrate(old,wall){
   if(first>=0)s.flags.first=s.people[first].name;
   return s;
 }
-const year = s => Math.floor(s.time/(60*minute))+1;
-const season = s => Math.floor(s.time/seasonLength)%4;
+const year = s => Math.floor(calendarTime(s)/yearLength)+1;
+const season = s => Math.floor(calendarTime(s)/seasonLength)%4;
 const capacity = s => 4+2*(Number(s.built.room)||0);
 const studyCapacity = s => 1+(Number(s.built.study)||0);
 const farmCapacity=s=>1+(s.built.plots??0);
@@ -514,9 +519,9 @@ function recruitChoiceReason(s,plan,index){
   return missing(s,recruitCost);
 }
 function advanceClock(s,time){
-  const before=Math.floor(s.time/seasonLength);
+  const before=Math.floor(calendarTime(s)/seasonLength);
   const changed=advanceFatigue(s,time);
-  const after=Math.floor(time/seasonLength);
+  const after=Math.floor(calendarTime(s)/seasonLength);
   if(before===after)return changed;
   settleSupply(s);
   if(Math.floor(before/4)!==Math.floor(after/4))annualRecruit(s);
@@ -1004,6 +1009,7 @@ function tick(s,wall){
   if(!s.created)return false;
   const elapsed=Math.min(offlineCap,Math.max(0,wall-s.wall));
   if(!elapsed)return false;
+  const oldYear=year(s);
   const end=s.time+elapsed;
   let changed=assignDuties(s);
   while(true){
@@ -1023,7 +1029,6 @@ function tick(s,wall){
     if(!j)break;
     advanceClock(s,Math.max(s.time,j.end));complete(s,j);assignDuties(s);changed=true;
   }
-  const oldYear=Math.floor((end-elapsed)/(60*minute))+1;
   changed=advanceClock(s,end)||changed;s.wall=Math.max(wall,s.wall);
   const years=year(s)-oldYear;
   if(years){s.people.forEach(p=>p.age+=years);log(s,'接任第 '+year(s)+' 年，青云宗入春。');changed=true;}
@@ -1499,6 +1504,10 @@ function apply(current,command,wall){
       person.stats=person.stats.slice(0,attributes.length);
     }
   }
+  if(next.calendarOffset===undefined){
+    const oldSeason=Math.floor(next.time/(15*minute));
+    next.calendarOffset=oldSeason*seasonLength-Math.floor(oldSeason*15*minute/dayLength)*dayLength;
+  }
   next.gear.bow??=0;
   next.stock.qi??=0;
   next.stock.wood??=0;
@@ -1718,7 +1727,7 @@ function marketReason(s,offer){
 function supplyStatus(s){
   const contract=s.supplyContract;
   if(!contract?.remaining)return contract?'契约已到期 · 交付 '+contract.delivered+'/'+supplyTerms.seasons+' 批':'尚未签约';
-  const next=(Math.floor(s.time/seasonLength)+1)*seasonLength;
+  const next=nextSeasonTime(s);
   return '剩余 '+contract.remaining+' 季 · 下次交货 '+clock(next)+' · '
     +(missing(s,supplyTerms.cost)||'药材已备齐');
 }
@@ -2239,7 +2248,7 @@ function setup(){
     +'</div><div class="actions">'+btn('均衡分配','balance')+btn('接过掌门印','create','class="gold"',left!==0?'请分完 33 点':'')+'</div>';
 }
 function calendarMarkup(){
-  return '接任第 '+year(state)+' 年 · '+seasons[season(state)]+' · '+String(gameHour(state)).padStart(2,'0')+':00 · 距换季 '+clock((Math.floor(state.time/seasonLength)+1)*seasonLength);
+  return '接任第 '+year(state)+' 年 · '+seasons[season(state)]+' · 第 '+calendarDay(state)+' 天 · '+String(gameHour(state)).padStart(2,'0')+':00 · 距换季 '+clock(nextSeasonTime(state));
 }
 function clocks(){
   const now=state.time+(state.created?Math.min(offlineCap,Math.max(0,Date.now()-state.wall)):0);
