@@ -1252,7 +1252,8 @@ let assignment={task:'meditate',leader:'',partner:[],pack:0,repeat:false};
 let formation={}, eventActors={};
 let activeView='overview';
 let selectedCharacter=null;
-let manualCategory='修炼功法';
+let manualCategory='全部';
+let manualElement='全部';
 
 function notice(message){
   $('notice').textContent=message;$('notice').hidden=!message;
@@ -1717,9 +1718,12 @@ function manualsMarkup(){
     ...Object.entries(manuals).map(([id,m])=>({...m,id,grade:'黄阶'})),
     {name:streamManual,grade:'玄阶',art:'stream',intro:'借水势卸力，适合替同门承受重击。',bonus:'灵力上限 +4、法防 +4',master:'替同门挡招时额外减伤 25%'}
   ];
-  const categories=['修炼功法','战斗功法','身法功法'];
-  const filters=categories.map(category=>btn(category,'manual-filter','data-value="'+category+'" aria-pressed="'+(category===manualCategory)+'"')).join('');
-  const cards=books.filter(book=>(book.category??'战斗功法')===manualCategory).map(book=>{
+  const filters=(label,values,kind,selected)=>'<div class="task-picks" role="group" aria-label="'+label+'">'
+    +'<small>'+label+'</small>'+values.map(value=>btn(value,kind,'data-value="'+value+'" aria-pressed="'+(value===selected)+'"')).join('')+'</div>';
+  const cards=books.filter(book=>
+    (manualCategory==='全部'||(book.category??'战斗功法')===manualCategory)
+    &&(manualElement==='全部'||(book.element??'通用')===manualElement)
+  ).map(book=>{
     const known=own(p.mastery,book.name), current=p.technique===book.name;
     const points=Math.min(6,p.mastery[book.name]??0);
     const task=book.id?'manual':'read';
@@ -1744,7 +1748,9 @@ function manualsMarkup(){
     +arts[id]+'</b><small>'+artCost(p,id)+' 灵力 · '+artEffects[id]+'</small></div></div>').join('');
   return '<div class="row"><h2>宗门功法</h2><label>修习者 <select data-manual-person>'
     +personOptions(i)+'</select></label></div><small>'+esc(rootLabel(p))+' · '+rankName(p)+'</small>'
-    +'<div class="task-picks" role="group" aria-label="功法分类">'+filters+'</div><div class="manual-grid">'+cards+'</div><section class="rpg-card manual-skills"><h4>已学术法</h4><div class="rpg-arts">'+learned+'</div></section>';
+    +filters('用途',['全部','修炼功法','战斗功法','身法功法'],'manual-filter',manualCategory)
+    +filters('属性',['全部',...elements,'通用'],'manual-element',manualElement)
+    +'<div class="manual-grid">'+(cards||'<p class="muted">这个组合暂无功法。</p>')+'</div><section class="rpg-card manual-skills"><h4>已学术法</h4><div class="rpg-arts">'+learned+'</div></section>';
 }
 
 function eventCard(e,mini=false){
@@ -1975,10 +1981,11 @@ function handle(e){
   if(kind==='draft'){draft.stats[n]+=Number(b.dataset.delta);setup();return;}
   if(kind==='balance'){draft.stats=[7,7,7,6,6];setup();return;}
   if(kind==='create'){sync({kind,name:$('leader-name').value,stats:draft.stats.slice(),element:$('leader-root').value});return;}
-  if(kind==='manual-filter'){
-    manualCategory=value;
+  if(kind==='manual-filter'||kind==='manual-element'){
+    if(kind==='manual-filter')manualCategory=value;
+    else manualElement=value;
     $('manual-page').innerHTML=manualsMarkup();clocks();
-    $('manual-page').querySelector('[data-kind="manual-filter"][aria-pressed="true"]')?.focus({preventScroll:true});
+    $('manual-page').querySelector('[data-kind="'+kind+'"][aria-pressed="true"]')?.focus({preventScroll:true});
     return;
   }
   if(kind==='trade-lesson'){sync({kind:'start',task:'apprentice',arg:value,ids:[state.people[i].mentor,i]});return;}
