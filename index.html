@@ -1873,12 +1873,13 @@ function townApproachMarkup(){
   if(visit)return head+'<p>'+esc(state.people[visit.person].name)+'已抵达</p>'
     +'<div class="actions">'+btn('年度招徒','open-town','data-value="recruit" class="gold"')+btn('进入石桥镇','open-town')+'</div>'
     +(recruitStatus?'<small>'+esc(recruitStatus)+'</small>':'');
+  const roster=state.annualRecruit?.year===year(state)&&state.annualRecruit.listed;
   if(walking)return head+'<p>'+esc(state.people[walking.people[0]].name)+'在路上 · '+clock(walking.end)+'</p>';
   const i=Number(assignment.leader);
   const chosen=state.people[i]&&assignment.leader!==''?i:state.people.findIndex((_,n)=>free(state,n));
   if(!selectedPersonExplicitly)assignment.leader=chosen<0?'':String(chosen);
   const spec=jobSpec(state,'visitTown',assignment.leader===''?[]:[chosen]);
-  return head+'<small>年度招徒 · '+esc(recruitStatus||'抵达后可访徒')+'</small>'+dispatchPicker(false,true)
+  return head+'<small>年度招徒 · '+esc(recruitStatus||(roster?'本年名册已保留，再到镇上即可查看和收徒':'抵达后可访徒'))+'</small>'+dispatchPicker(false,true)
     +'<p><small>'+esc(spec.reason||routeText(state,spec.route,spec.duration)+' · 2 口粮')+'</small></p>'
     +btn('前往石桥镇','visit-town','data-i="'+chosen+'" class="gold"',spec.reason);
 }
