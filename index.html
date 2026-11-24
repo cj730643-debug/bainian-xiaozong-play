@@ -259,6 +259,7 @@ function learnManual(p,name,art){
   if(art&&!p.known.includes(art))p.known.push(art);
 };
 const forgeRecipes={
+  bow:{duration:2,cost:{wood:4,masonry:1},effect:'基础物攻 10 · 射程 3 格'},
   iron:{duration:3,cost:{wood:2,masonry:2,stone:2},effect:'武器基础物攻 15'},
   heart:{duration:2,cost:{wood:2,masonry:1,stone:1},effect:'每场首次受击减伤 30%'},
   jade:{duration:3,cost:{masonry:3,stone:2},effect:'灵力上限 +30%'}
@@ -339,7 +340,7 @@ function fresh(wall){
     stock:{wood:0,masonry:0,food:12,herbs:3,stone:0,main:0,aux:0,pill:0,heal:0,qi:0},reserve:{},
     jobs:[],serial:0,eventQueue:[],seenEvents:[],journal:[],archive:[starterManual,'借泉契',...Object.values(manuals).map(m=>m.name)],
     farmRounds:0,studyRounds:0,flags:{},built:{},route:'',uses:0,ditch:0,
-    gear:{iron:0,heart:0,jade:0},seasonClaims:{},legacy:false};
+    gear:{bow:0,iron:0,heart:0,jade:0},seasonClaims:{},legacy:false};
 }
 function log(s,line){s.journal.unshift(line);s.journal.length=Math.min(s.journal.length,40);}
 function queue(s,id,people,job=null,repeat=false){
@@ -1039,9 +1040,10 @@ function combatStats(p){
   const hp=Math.round((60+body*8)*(p.rank?1.4:1)*(earth?1.1:1));
   const realm=p.rank?1.25:1;
   return {
+    attackRange:p.weapon==='bow'?3:1,
     speed:Number((speed*(mastered(p,manuals.cloudstep.name,6)?1.6:mastered(p,manuals.cloudstep.name)?1.3:1)).toFixed(2)),hp,maxHp:hp,
     mp:Math.round((10+2*spirit)*(p.rank?1.5:1)*(water?1.1:stream?1.2:1)*(p.charm==='jade'?1.3:1)),
-    physicalAttack:Math.round(((p.weapon==='iron'?15:12)+body*0.5)*realm*(mastered(p,manuals.metal.name)?1.15:1)),
+    physicalAttack:Math.round(((p.weapon==='iron'?15:p.weapon==='bow'?10:12)+body*0.5)*realm*(mastered(p,manuals.metal.name)?1.15:1)),
     physicalDefense:Math.round(body*realm*(earth?1.35:starter?1.2:1)),
     spellAttack:Math.round((10+spirit*0.5)*realm*(mastered(p,manuals.fire.name)?1.2:1)),
     spellDefense:Math.round(spirit*realm*(water?1.25:stream?1.3:1))
@@ -1096,6 +1098,24 @@ function battleFinish(s,result){
   s.eventQueue=s.eventQueue.filter(e=>e.token!==b.token);
   s.battle=null;log(s,enemies[b.enemyId].name+'之战 · '+result+'。');
 }
+function battleDistance(a,b,width){
+  return Math.abs(a%width-b%width)+Math.abs(Math.floor(a/width)-Math.floor(b/width));
+}
+function battleStep(from,target,width,occupied,range){
+  const queue=[[from,from]], visited=new Set([from]);
+  for(let i=0;i<queue.length;i++){
+    const [cell,first]=queue[i];
+    if(battleDistance(cell,target,width)<=range)return first;
+    const neighbors=[cell-width,cell+width];
+    if(cell%width>0)neighbors.push(cell-1);
+    if(cell%width<width-1)neighbors.push(cell+1);
+    for(const next of neighbors){
+      if(next<0||next>=width*4||visited.has(next)||occupied.has(next))continue;
+      visited.add(next);queue.push([next,cell===from?next:first]);
+    }
+  }
+  return from;
+}
 function battleRound(s){
   const b=s.battle,round=++b.round;
   for(const fighter of b.team){
@@ -1104,6 +1124,10 @@ function battleRound(s){
       Object.assign(fighter,{physicalAttack,physicalDefense,spellAttack,spellDefense});
     }
   }
+  const width=b.width??3;
+  b.enemyCell??=width+Math.floor((width-1)/2);
+  for(const f of b.team)f.cell??=2*width+f.slot;
+  const liveCells=()=>new Set([b.enemyCell,...b.team.filter(f=>f.hp>0).map(f=>f.cell)]);
   let acted=false,cancelled=false,guarded=false,intercept=null;
   if(b.burning?.rounds>0){
     b.burning.rounds--;const damage=hitEnemy(b,b.burning.damage,'spell');
@@ -1113,16 +1137,26 @@ function battleRound(s){
   const front=b.team.filter(f=>f.hp>0).sort((a,b)=>a.slot-b.slot);
   const enemy=enemies[b.enemyId];
   const rear=front.find(f=>f.slot>=(b.width??3));
-  const pounce=enemy.pounces&&round%2===0&&!!rear;
-  const target=pounce?rear:front[0];
-  const heavy=!enemy.pounces&&round%3===0;
+  const distance=(a,b)=>battleDistance(a,b,width);
+  const nearest=()=>front.filter(f=>f.hp>0).sort((a,b)=>distance(a.cell,b.enemyCell)-distance(b.cell,battle.enemyCell)||a.slot-b.slot)[0];
+  const pounce=enemy.pounces&&round%2===0&&!!rear&&distance(rear.cell,b.enemyCell)<=3;
+  const target=pounce?rear:nearest();
+  const enemyRange=enemy.spellHit&&!pounce?3:pounce?3:1;
+  const heavy=!enemy.pounces&&round%3===0&&distance(target.cell,b.enemyCell)<=enemyRange;
   b.lines.push('第 '+round+' 轮 · '+enemy.name+(pounce?'准备扑袭':heavy?'蓄力重击':enemy.spellHit?'凝聚妖术':'准备抓挠')+' '+s.people[target.i].name+'。');
   const actors=[...front,null].sort((a,b)=>(b?.speed??enemy.speed)-(a?.speed??enemy.speed)||(a===null?1:b===null?-1:a.slot-b.slot));
   for(const f of actors){
     if(!f){
       acted=true;
       if(cancelled)continue;
-      const victim=intercept?.hp>0?intercept:target;
+      const aimed=pounce||heavy?target:nearest();
+      if(distance(aimed.cell,b.enemyCell)>enemyRange){
+        const step=battleStep(b.enemyCell,aimed.cell,width,liveCells(),enemyRange);
+        b.lines.push(enemy.name+(step===b.enemyCell?'无路可进。':'向目标移动 1 格。'));
+        b.enemyCell=step;
+        continue;
+      }
+      const victim=intercept?.hp>0?intercept:aimed;
       const spell=enemy.spellHit&&!pounce;
       const power=((heavy||pounce)?enemy.heavy:enemy.hit)*(victim.rank?0.9:1)
         *(guarded&&victim===target?(mastered(s.people[victim.i],starterManual,6)?0.4:0.5):1)*(victim===intercept&&mastered(s.people[victim.i],streamManual,6)?0.75:1);
@@ -1138,7 +1172,9 @@ function battleRound(s){
       b.pack--;f.hp=Math.min(f.maxHp,f.hp+Math.max(1,Math.round(f.maxHp*0.25)));b.lines.push(name+'服用疗伤丹，恢复至 '+f.hp+' 气血。');continue;
     }
     const person=s.people[f.i];
+    const reach=distance(f.cell,b.enemyCell);
     const condition=art=>{
+      if(['pierce','burn','stone','vine'].includes(art)&&reach>(art==='pierce'?1:3))return false;
       if(art==='pierce')return b.shield>0;
       if(art==='recover')return !f.recovered&&f.hp*5<=f.maxHp*2;
       if(art==='burn')return !b.burning?.rounds;
@@ -1168,6 +1204,13 @@ function battleRound(s){
     }else{
       if(f.skills.some(condition))b.lines.push(name+'灵力不足，改用普攻。');
       if(heavy&&acted&&f.skills.includes('stone')&&!cancelled)b.lines.push(name+'出手时重击已落下，改用普攻。');
+      const range=person.weapon==='bow'?3:1;
+      if(reach>range){
+        const step=battleStep(f.cell,b.enemyCell,width,liveCells(),range);
+        b.lines.push(name+(step===f.cell?'无路可进。':'向敌方移动 1 格。'));
+        f.cell=step;
+        continue;
+      }
       const damage=hitEnemy(b,f.physicalAttack);b.lines.push(name+'普攻，造成 '+damage+' 物理伤害。');
     }
     if(b.enemy<=0){b.enemy=0;battleFinish(s,'胜利');return;}
@@ -1295,7 +1338,7 @@ function dispatch(s,a){
     case 'technique':if(p&&free(s,a.i)&&own(p.mastery,a.value)){p.technique=a.value;return;}break;
     case 'gear':{
       if(!p||!free(s,a.i)||!['weapon','charm'].includes(a.slot))break;
-      const choices=a.slot==='weapon'?['wood','iron']:['','heart','jade'];
+      const choices=a.slot==='weapon'?['wood','iron','bow']:['','heart','jade'];
       const old=p[a.slot];
       if(!choices.includes(a.value)||old===a.value||own(s.gear,a.value)&&s.gear[a.value]<1)break;
       if(own(s.gear,old))s.gear[old]++;
@@ -1321,7 +1364,7 @@ const btn=(text,kind,attrs='',reason='')=>'<button type="button" data-kind="'+ki
   +(reason?' disabled title="'+esc(reason)+'"':'')+'>'+esc(text)+'</button>';
 const option=(value,label,selected=false)=>'<option value="'+esc(value)+'" '+(selected?'selected':'')+'>'+esc(label)+'</option>';
 const clock=end=>'<span data-clock="'+end+'"></span>';
-const gearNames={wood:'青云木剑',iron:'旧铁剑',heart:'护心符',jade:'引灵佩','':'无'};
+const gearNames={bow:'青竹弓',wood:'青云木剑',iron:'旧铁剑',heart:'护心符',jade:'引灵佩','':'无'};
 let state=fresh(Date.now()), popup=null, overlay=null, busy=false, lastSignature='', temporary=false, channel=null;
 let draft={stats:[3,3,3,3,3]};
 let assignment={task:'meditate',leader:'',partner:[],pack:0,repeat:false};
@@ -1360,6 +1403,7 @@ function apply(current,command,wall){
       person.stats=person.stats.slice(0,attributes.length);
     }
   }
+  next.gear.bow??=0;
   next.stock.qi??=0;
   next.stock.wood??=0;
   next.stock.masonry??=0;
@@ -1776,10 +1820,10 @@ function peopleMarkup(){
       +(id===state.leader?'掌门 · ':'')+rankName(person)+'</small></span></button>';
   }).join('');
   const loadout=[
-    {slot:'weapon',label:'武器',mark:'剑',choices:['wood','iron']},
+    {slot:'weapon',label:'武器',mark:'剑',choices:['wood','iron','bow']},
     {slot:'charm',label:'护身物',mark:'佩',choices:['','heart','jade']}
   ];
-  const effects={wood:'武器基础物攻 12',iron:'武器基础物攻 15',heart:'每场首次受击减伤 30%',jade:'灵力上限 +30%','':'空槽'};
+  const effects={bow:forgeRecipes.bow.effect,wood:'武器基础物攻 12',iron:'武器基础物攻 15',heart:'每场首次受击减伤 30%',jade:'灵力上限 +30%','':'空槽'};
   const equipment=loadout.map(({slot,label,mark,choices})=>{
     const equipped=p[slot];
     const options=choices.filter(k=>k===equipped||k==='wood'||!k||state.gear[k]);
@@ -1868,16 +1912,18 @@ function eventCard(e,mini=false){
     }).join('')+(own(enemies,e.id)?btn('打开布阵','jump','data-value="battle"'):'')+'</div>';
 }
 let boardSelection=null;
-function battlefieldMarkup(team,width,enemy,token,editable){
+function battlefieldMarkup(team,width,enemy,token,editable,enemyCell=width+Math.floor((width-1)/2)){
   const selected=editable&&boardSelection?.token===token?boardSelection.index:null;
   const rows=['敌方后排','敌方前排','我方前排','我方后排'];
-  return (editable?'<p><small>先点上阵弟子，再点目标格。目标格有人时交换站位。</small></p>':'')
+  return (editable?'<p><small>先点弟子，再点格子布阵。近战 1 格、弓箭 3 格；够不到就自动移动。</small></p>':'')
     +'<div class="battlefield-scroll"><div class="battlefield" style="--battle-cols:'+width+'">'
     +rows.map((label,row)=>'<div class="battlefield-row"><small>'+label+'</small>'
       +Array.from({length:width},(_,col)=>{
-        if(row<2)return '<div class="battle-cell enemy">'+(row===1&&col===Math.floor((width-1)/2)?esc(enemy.name):'·')+'</div>';
-        const slot=(row-2)*width+col;
-        const index=team.findIndex(f=>f.selected!==false&&f.slot===slot);
+        const cell=row*width+col;
+        if(cell===enemyCell)return '<div class="battle-cell enemy">'+esc(enemy.name)+'</div>';
+        if(editable&&row<2)return '<div class="battle-cell enemy">·</div>';
+        const slot=cell-2*width;
+        const index=team.findIndex(f=>f.selected!==false&&(editable?f.slot===slot:(f.cell??2*width+f.slot)===cell));
         const f=team[index],name=f?esc(state.people[f.i].name):'·';
         const classes='battle-cell'+(selected!==null&&index===selected?' chosen':'')+(f?.down?' down':'');
         const label=rows[row]+' '+(col+1)+(f?' '+name:' 空位');
@@ -1903,7 +1949,7 @@ function battleMarkup(){
   if(b){
     const enemy=enemies[b.enemyId];
     return '<h2>'+enemy.name+'之战 · 第 '+b.round+' 轮</h2><p>'+enemy.name+'气血 '+b.enemy+'/'+enemyHealth(state,b.enemyId)+(b.shield?' · 护盾 '+b.shield:'')+'</p><div class="stats">'
-      +b.team.map(f=>'<span>'+esc(state.people[f.i].name)+' '+f.hp+'/'+f.maxHp+' 气血 · '+f.mp+' 灵力</span>').join('')+'</div>'+battlefieldMarkup(b.team,b.width??3,enemy,b.token,false)
+      +b.team.map(f=>'<span>'+esc(state.people[f.i].name)+' '+f.hp+'/'+f.maxHp+' 气血 · '+f.mp+' 灵力</span>').join('')+'</div>'+battlefieldMarkup(b.team,b.width??3,enemy,b.token,false,b.enemyCell)
       +'<p>'+esc(b.lines.at(-1)??'队伍已布阵。')+'</p>'+btn('撤退','retreat','data-token="'+b.token+'"');
   }
   if(!e){
