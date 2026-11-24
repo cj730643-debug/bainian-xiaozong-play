@@ -88,6 +88,7 @@ header{height:75px;display:flex;align-items:center;justify-content:space-between
 .battlefield-scroll{overflow-x:auto}.battlefield{display:grid;gap:6px;margin:8px 0 16px}.battlefield-row{display:grid;grid-template-columns:4em repeat(var(--battle-cols),minmax(60px,1fr));gap:5px;align-items:stretch}.battlefield-row>small{align-self:center}.battle-cell{min-height:44px;padding:4px;display:grid;place-items:center;border:1px solid #526756;border-radius:6px;background:#23372b;text-align:center;font-size:13px;overflow-wrap:anywhere}.battle-cell.enemy{background:#332720;border-color:#644a3c}.battle-cell.chosen{border-color:var(--gold);color:var(--gold)}.battle-cell.down{opacity:.55}
 .town-window{width:min(900px,94vw);max-height:88vh;overflow:auto;color:var(--ink);background:var(--surface);border:1px solid #73866c;border-radius:14px;padding:20px}.town-window::backdrop{background:#000a}.town-window .town-header{position:sticky;top:-20px;background:var(--surface);z-index:2;padding:12px 0}.town-window .task-form{margin-top:12px}
 .manual-art{padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface-raised)}.manual-art>*{display:block}
+.dispatch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,78px),1fr));gap:7px;margin:9px 0}.dispatch-person{position:relative;min-width:0;aspect-ratio:1;display:grid;place-items:center;padding:2px}.dispatch-person[aria-pressed=true]{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);background:#2c3d2c}.dispatch-person strong{display:block;overflow-wrap:anywhere}.dispatch-person small{font-size:11px;color:var(--gold)}.dispatch-person .dispatch-tag{position:absolute;right:3px;top:2px;font-size:10px}.dispatch-person .dispatch-status{position:absolute;bottom:2px;left:2px;right:2px;line-height:1.15;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 </style>
 
 <dialog id="town-window" class="town-window" aria-label="石桥镇"></dialog>
@@ -310,7 +311,7 @@ const tasks = {
   trade:['石桥镇换粮',2],winter:['围炉讲法',1]
 };
 const travel = new Set([...Object.keys(townJobs),'survey','develop','harvest','hill','seek','patrol','rain','ape','trail','outer','town','temple','canal','recruit','trade','visitTown']);
-const groupTravel = new Set([...Object.keys(townJobs),'survey','develop','harvest','hill','seek','patrol','rain','ape','temple','canal','outer']);
+const groupTravel = new Set([...Object.keys(townJobs),'survey','harvest','hill','seek','patrol','rain','ape','temple','canal','outer']);
 const materialDuties={timber:['wood','forest','mist1'],masonry:['masonry','quarry','mist2']};
 const stockGoal=(s,id)=>s.workGoals?.[id]??(['wood','masonry'].includes(id)?12:0);
 const siteExplored=(s,id)=>Boolean(s.flags[(own(discoveries,id)?'explored_':'survey_')+id]);
@@ -318,7 +319,7 @@ const materialSite=(p,mode)=>p.worksites?.[mode]??materialDuties[mode][1];
 function plannedMaterial(s,id){
   return s.jobs.reduce((total,j)=>{
     const site=industries[j.arg];
-    return total+(j.type==='harvest'&&site?.item===id?site.base+(s.flags['industry_'+j.arg]?site.bonus:0):0);
+    return total+(j.type==='harvest'&&site?.item===id?site.base+(s.flags['industry_'+j.arg]?site.bonus:0)+tradeLevel(tradeCount(s.people[j.people[0]],tradeFor(j.type,j.arg))):0);
   },s.stock[id]);
 }
 const duties={
@@ -564,11 +565,19 @@ function create(s,name,stats,element='金'){
   log(s,clean+'接过掌门印，青云宗的借泉契仍待处理。');
 }
 const trades={
+  building:['建造','施工耗时减少 10%／20%'],
+  logging:['伐木','木材每趟 +1／+2'],
+  quarrying:['采石','石料每趟 +1／+2'],
+  forging:['炼器','打造耗时减少 10%／20%'],
   farming:['种药','普通药材每轮 +1／+2'],
   alchemy:['炼丹','炼丹耗时减少 10%／20%'],
   mining:['采矿','灵石每趟 +1／+2']
 };
 function tradeFor(type,arg){
+  if(['repair','develop','fortify','clearRocks'].includes(type))return 'building';
+  if(type==='forge')return 'forging';
+  if(type==='harvest'&&industries[arg]?.item==='wood')return 'logging';
+  if(type==='harvest'&&industries[arg]?.item==='masonry')return 'quarrying';
   if(type==='farm')return 'farming';
   if(type==='brew'||own(productionRecipes,type))return 'alchemy';
   if(type==='harvest'&&(arg==='mine'||arg==='mist5'))return 'mining';
@@ -736,7 +745,8 @@ function jobSpec(s,type,ids,arg='',pack=0){
       break;
     case 'teach': if(!p.rank||members[1].rank||s.legacy)return fail('授徒需要一名筑基修士和一名炼气后辈，限一次。');break;
   }
-  if(tradeFor(type,arg)==='alchemy')duration=Number((duration*(1-0.1*tradeLevel(tradeCount(p,'alchemy')))).toFixed(2));
+  const specialty=tradeFor(type,arg);
+  if(['alchemy','building','forging'].includes(specialty))duration=Number((duration*(1-0.1*tradeLevel(tradeCount(p,specialty)))).toFixed(2));
   if(['manual','read','learn','vine','transmit'].includes(type))duration=Math.max(1/60,Math.round(duration*60/learningRate(type==='transmit'?members[1]:p))/60);
   const shortage=missing(s,cost,useReserve);
   return {label,duration,cost,useReserve,arg,reason:shortage};
@@ -810,7 +820,7 @@ function complete(s,j){
     case 'develop':mark(s,'industry_'+j.arg);break;
     case 'harvest':{
       const site=industries[j.arg];
-      const amount=site.base+(s.flags['industry_'+j.arg]?site.bonus:0)+(trade==='mining'?proficiency:0);
+      const amount=site.base+(s.flags['industry_'+j.arg]?site.bonus:0)+(['mining','logging','quarrying'].includes(trade)?proficiency:0);
       s.stock[site.item]+=amount;
       log(s,'从'+site.name+'带回 '+amount+' '+resources[site.item]+'。');
       break;
@@ -1610,6 +1620,7 @@ function assignmentCommand(){
   return {kind:'start',task,arg,ids,pack:Number(assignment.pack),repeat:assignment.repeat};
 }
 function chooseBuilding(id,task){
+  selectedPersonExplicitly=false;
   selectedBuilding=id;
   assignment.task=task??'';
   assignment.partner=[];
@@ -1694,10 +1705,10 @@ function townApproachMarkup(){
   if(visit)return head+'<p>'+esc(state.people[visit.person].name)+'已抵达</p>'+btn('进入石桥镇','open-town','class="gold"');
   if(walking)return head+'<p>'+esc(state.people[walking.people[0]].name)+'在路上 · '+clock(walking.end)+'</p>';
   const i=Number(assignment.leader);
-  const chosen=state.people[i]&&assignment.leader!==''?i:Math.max(0,state.people.findIndex((_,n)=>free(state,n)));
-  assignment.leader=String(chosen);
-  const spec=jobSpec(state,'visitTown',[chosen]);
-  return head+'<label>执行者 <select data-field="leader">'+personOptions(chosen)+'</select></label>'
+  const chosen=state.people[i]&&assignment.leader!==''?i:state.people.findIndex((_,n)=>free(state,n));
+  if(!selectedPersonExplicitly)assignment.leader=chosen<0?'':String(chosen);
+  const spec=jobSpec(state,'visitTown',assignment.leader===''?[]:[chosen]);
+  return head+dispatchPicker(false,true)
     +'<p><small>'+esc(spec.reason||'1 分钟 · 2 口粮')+'</small></p>'
     +btn('前往石桥镇','visit-town','data-i="'+chosen+'" class="gold"',spec.reason);
 }
@@ -1728,6 +1739,19 @@ function assignmentMarkup(){
   else if(selected)detail=pending.filter(e=>eventPlaces[e.id]===selected).map(e=>'<article class="pending">'+eventCard(e)+'</article>').join('')+assignmentPanel();
   return '<h2>宗门地图</h2><div class="map-layout"><div><div class="map-scroll"><div class="map-grid">'+mapRoads.map(roadMarkup).join('')+tiles
     +'</div></div><p class="map-legend">虚线为道路 · ! 待处理事件</p></div><aside class="map-details">'+detail+'</aside></div>';
+}
+function dispatchPicker(team,visit=false){
+  const entries=state.people.map((p,i)=>({p,i,idle:free(state,i)})).sort((a,b)=>Number(b.idle)-Number(a.idle));
+  return '<div class="dispatch-grid" role="group" aria-label="'+(team?'选择队伍':'选择执行者')+'">'+entries.map(({p,i,idle})=>{
+    const leader=String(i)===assignment.leader, member=team&&assignment.partner.includes(i);
+    const top=Object.keys(trades).reduce((best,id)=>tradeCount(p,id)>(best?tradeCount(p,best):0)?id:best,null);
+    const status=idle?'':activityStatus(p,i);
+    return '<button type="button" class="dispatch-person" data-kind="pick-dispatch" data-i="'+i+'" data-value="'+(visit?'visit':team?'team':'solo')
+      +'" aria-pressed="'+(leader||member)+'"'+(idle?'':' disabled')+'>'
+      +(team&&(leader||member)?'<small class="dispatch-tag">'+(leader?'领队':'同行')+'</small>':'')
+      +'<span><strong>'+esc(p.name)+'</strong><small>'+(top?trades[top][0]+' · '+tradeRanks[tradeLevel(tradeCount(p,top))]:'暂无专长')+'</small></span>'
+      +(status?'<small class="dispatch-status">'+status+'</small>':'')+'</button>';
+  }).join('')+'</div>';
 }
 function assignmentPanel(){
   const availableTasks=taskChoices();
@@ -1783,7 +1807,7 @@ function assignmentPanel(){
   if(!selectedPersonExplicitly){
     const eligible=state.people.findIndex((_,i)=>!jobSpec(state,type,[i],arg,0).reason);
     const idle=state.people.findIndex((_,i)=>free(state,i));
-    assignment.leader=String(eligible>=0?eligible:idle>=0?idle:state.leader);
+    assignment.leader=eligible>=0?String(eligible):idle>=0?String(idle):'';
   }
   if(type==='manual'){
     const entry=manuals[arg];
@@ -1796,15 +1820,12 @@ function assignmentPanel(){
   const bag=['seek','hill','patrol','rain','ape','temple','canal','outer'].includes(command.task);
   const repeat=['farm','meditate'].includes(command.task);
   return html+'<div class="task-picks">'+choices.map(id=>btn(taskLabel(id),'task','data-value="'+id+'" aria-pressed="'+(id===assignment.task)+'"')).join('')
-    +'</div><div class="form-grid"><label>执行者<select data-field="leader">'+personOptions(assignment.leader)+'</select></label>'
-    +(team?'<fieldset class="actions"><legend>'+(command.task==='watch'?'值守成员 · 无口粮消耗':'同行成员 · 每人 2 口粮')+'</legend>'
-      +state.people.map((p,i)=>String(i)===assignment.leader?'':'<label class="check"><input type="checkbox" data-companion="'+i+'" '
-        +(assignment.partner.includes(i)?'checked ':'')+(!free(state,i)&&!assignment.partner.includes(i)?'disabled ':'')+'> '+esc(p.name)+(!free(state,i)?' · 忙碌':'')+'</label>').join('')+'</fieldset>':'')
+    +'</div>'+dispatchPicker(team)+(team&&assignment.partner.length?'<div class="actions">'+assignment.partner.map(i=>btn('由'+state.people[i].name+'领队','pick-leader','data-i="'+i+'"',free(state,i)?'':'弟子正忙')).join('')+'</div>':'')+'<div class="form-grid">'
     +(lesson?'<label>后辈<select data-lesson>'+option('','请选择',!assignment.partner.length)+state.people.map((p,i)=>
       String(i)===assignment.leader?'':option(i,p.name,i===assignment.partner[0])).join('')+'</select></label>':'')
     +(bag?'<label>携带疗伤丹<select data-field="pack">'+[0,1,2].map(n=>option(n,n,Number(assignment.pack)===n)).join('')+'</select></label>':'')
     +(repeat?'<label class="check"><input type="checkbox" data-field="repeat" '+(assignment.repeat?'checked':'')+'> 自动重复</label>':'')
-    +'</div><div class="row"><small>'+esc(spec.reason||[spec.duration+' 分钟',costText(spec.cost)].filter(Boolean).join(' · '))+'</small>'
+    +'</div><div class="row"><small>'+esc('已选 '+command.ids.length+' 人 · '+(spec.reason||[spec.duration+' 分钟',costText(spec.cost)].filter(Boolean).join(' · ')))+'</small>'
     +btn('开始'+taskLabel(assignment.task),'assign','class="gold"',spec.reason)+'</div></div>'+townServices;
 }
 function actorStatus(p,i){
@@ -2219,6 +2240,27 @@ function jump(id){
 function handle(e){
   const b=e.target.closest('button[data-kind]');if(!b||b.disabled)return;
   const {kind,value}=b.dataset, i=Number(b.dataset.i),n=Number(b.dataset.n),token=Number(b.dataset.token);
+  if(kind==='pick-leader'){
+    if(!assignment.partner.includes(i)||!free(state,i))return;
+    const former=Number(assignment.leader);
+    assignment.leader=String(i);
+    assignment.partner=assignment.partner.map(n=>n===i?former:n);
+    render();return;
+  }
+  if(kind==='pick-dispatch'){
+    if(!free(state,i))return;
+    selectedPersonExplicitly=true;
+    if(value!=='team'||assignment.leader===''){
+      assignment.leader=String(i);assignment.partner=[];
+    }else if(assignment.leader===String(i)){
+      const [next,...rest]=assignment.partner;
+      assignment.leader=next===undefined?'':String(next);assignment.partner=rest;
+    }else{
+      assignment.partner=assignment.partner.includes(i)?assignment.partner.filter(n=>n!==i):[...assignment.partner,i];
+    }
+    render();(document.querySelector('#town-window[open]')??$('assignments')).querySelector('[data-kind="pick-dispatch"][data-i="'+i+'"]')?.focus({preventScroll:true});
+    return;
+  }
   if(kind==='visit-town'){sync({kind:'start',task:'visitTown',ids:[i]});return;}
   if(kind==='open-town'){if(state.townVisit){seenTownVisit=state.townVisit.id;chooseBuilding('town');assignment.leader=String(state.townVisit.person);selectedPersonExplicitly=true;$('town-window').showModal();refreshTownWindow();clocks();}return;}
   if(kind==='close-town'){$('town-window').close();return;}
