@@ -218,6 +218,7 @@ const withName=(line,person)=>line.replaceAll('{name}',()=>person.name);
 const minute = 60_000;
 const scheduleHour = 30_000;
 const scheduledWork={
+  timber:['伐木','harvest'],masonry:['采石','harvest'],smith:['炼器','forge'],
   farm:['种药','farm'],heal:['炼丹','heal'],patrol:['巡山','patrol'],
   field:['耕田','harvest','field'],mine:['采矿','harvest','mine']
 };
@@ -307,7 +308,20 @@ const tasks = {
 };
 const travel = new Set([...Object.keys(townJobs),'survey','develop','harvest','hill','seek','patrol','rain','ape','trail','outer','town','temple','canal','recruit','trade']);
 const groupTravel = new Set([...Object.keys(townJobs),'survey','develop','harvest','hill','seek','patrol','rain','ape','temple','canal','outer']);
+const materialDuties={timber:['wood','forest','mist1'],masonry:['masonry','quarry','mist2']};
+const stockGoal=(s,id)=>s.workGoals?.[id]??(['wood','masonry'].includes(id)?12:0);
+const siteExplored=(s,id)=>Boolean(s.flags[(own(discoveries,id)?'explored_':'survey_')+id]);
+const materialSite=(p,mode)=>p.worksites?.[mode]??materialDuties[mode][1];
+function plannedMaterial(s,id){
+  return s.jobs.reduce((total,j)=>{
+    const site=industries[j.arg];
+    return total+(j.type==='harvest'&&site?.item===id?site.base+(s.flags['industry_'+j.arg]?site.bonus:0):0);
+  },s.stock[id]);
+}
 const duties={
+  timber:['伐木管事','harvest','按木材库存目标采集'],
+  masonry:['采石管事','harvest','按石料库存目标采集'],
+  smith:['炼器执事','forge','按工坊生产单打造'],
   field:['灵田管事','harvest','field'],
   mine:['矿道管事','harvest','mine'],
   farm:['药圃管事','farm','空闲时照料药圃'],
@@ -903,6 +917,22 @@ function assignDuties(s){
       }
       return;
     }
+    const workMode=mode==='duty'?p.duty:mode;
+    if(own(materialDuties,workMode)||workMode==='smith'){
+      if(p.duty===workMode&&p.dutyPaused)return;
+      let task,arg;
+      if(workMode==='smith'){
+        task='forge';
+        arg=Object.keys(forgeRecipes).find(id=>s.gear[id]+s.jobs.filter(j=>j.type==='forge'&&j.arg===id).length<stockGoal(s,id)
+          &&!jobSpec(s,task,[i],id).reason);
+      }else{
+        task='harvest';
+        const [resource]=materialDuties[workMode];
+        if(plannedMaterial(s,resource)<stockGoal(s,resource))arg=materialSite(p,workMode);
+      }
+      if(arg&&!start(s,task,[i],arg)){jobFor(s,i).duty=true;changed=true;}
+      return;
+    }
     const work=scheduledWork[mode];
     const task=recipe||(mode==='study'?'meditate':work?.[1]??duty?.[1]);
     if(!task)return;
@@ -1266,6 +1296,17 @@ function dispatch(s,a){
       p.duty=a.value;p.dutyPaused=false;
       return;
     }
+    case 'work-goal':
+      if(s.created&&Number.isSafeInteger(a.n)&&a.n>=0&&(['wood','masonry'].includes(a.value)||own(forgeRecipes,a.value))){
+        s.workGoals??={};s.workGoals[a.value]=a.n;return;
+      }
+      return '请输入非负整数。';
+    case 'worksite':
+      if(p&&own(materialDuties,a.mode)&&materialDuties[a.mode].slice(1).includes(a.value)
+        &&(a.value===materialDuties[a.mode][1]||siteExplored(s,a.value))){
+        p.worksites??={};p.worksites[a.mode]=a.value;return;
+      }
+      return '该采集地尚未解锁。';
     case 'pause-duty':{
       if(!p?.duty)break;
       p.dutyPaused=true;return;
@@ -1679,7 +1720,8 @@ function assignmentPanel(){
   if(selectedBuilding==='workshop'&&state.built.workshop){
     html+='<section class="task-form"><h3>炼器配方</h3>'+Object.entries(forgeRecipes).map(([id,recipe])=>
       '<div class="row"><span>'+gearNames[id]+'<small>'+costText(recipe.cost)+' · '+recipe.duration+' 分钟 · '+recipe.effect+'</small></span>'
-      +'<b>在库 '+state.gear[id]+'</b></div>').join('')+'</section>';
+      +'<b>在库 '+state.gear[id]+' · 在制 '+state.jobs.filter(j=>j.type==='forge'&&j.arg===id).length+'</b>'
+        +workGoalInput(state,id)+'</div>').join('')+'<small>排班选「炼器」，在库加在制达到目标后停工。</small></section>';
   }
   if(selectedBuilding==='quarry'&&state.flags.quarryRocks)html+='<p class="accent">! 山道落石</p><p>落石堵住了采石道。派弟子清理可恢复作业，带回 2 石料。</p>';
   const townServices=selectedBuilding==='town'?marketMarkup()+commissionsMarkup():'';
@@ -1773,6 +1815,9 @@ function scheduleMarkup(){
     +btn(p.schedulePaused?'恢复自动安排':'暂停自动安排','schedule','data-i="'+i+'" data-value="toggle"')+'</div>'
     +'<p class="muted">可在不同小时安排种药、炼丹、巡山、耕田和采矿。耕田与采矿需先整修对应地点，巡山需留足口粮。跨时段的差事会做完当前一轮。疲劳达到 80 时，本轮结束后休息；自由时段达到 60 即优先休息。疲劳降到 30 后恢复排班。</p>';
 }
+function workGoalInput(s,id){
+  return '<label>库存目标 <input type="number" min="0" step="1" data-work-goal="'+id+'" value="'+stockGoal(s,id)+'"></label>';
+}
 function dutyMarkup(p,i){
   const duty=duties[p.duty], job=jobFor(state,i);
   const description=duty?(p.dutyPaused?(job?.duty?'本轮完成后暂停':'已暂停')
@@ -1780,7 +1825,15 @@ function dutyMarkup(p,i){
   return '<section class="rpg-card"><h4>常驻职务</h4><div class="row"><label>职务 <select data-duty="'+i+'">'
     +option('','无',!p.duty)+Object.entries(duties).filter(([id])=>!own(industries,id)||state.flags['industry_'+id]).map(([id,entry])=>option(id,entry[0],id===p.duty)).join('')
     +'</select></label>'+(duty?btn(p.dutyPaused?'恢复履职':'暂停履职',p.dutyPaused?'resume-duty':'pause-duty','data-i="'+i+'"'):'')
-    +'</div>'+(description?'<small>'+description+'</small>':'')+'</section>';
+    +'</div>'+(description?'<small>'+description+'</small>':'')
+    +Object.entries(materialDuties).map(([mode,[id,...sites]])=>{
+      const selected=materialSite(p,mode);
+      const status=selected==='quarry'&&state.flags.quarryRocks?'山道落石，等待清理'
+        :!siteExplored(state,selected)?'请先勘查':plannedMaterial(state,id)>=stockGoal(state,id)?'库存目标已足':'等待排班';
+      return '<div class="row"><label>'+resources[id]+'来源 <select data-worksite="'+mode+'" data-i="'+i+'">'
+        +sites.filter((site,index)=>index===0||siteExplored(state,site)).map(site=>option(site,industries[site].name,site===selected)).join('')
+        +'</select></label>'+workGoalInput(state,id)+'<small>'+status+'</small></div>';
+    }).join('')+'</section>';
 }
 function mentorshipMarkup(p,i){
   const teacher=state.people[p.mentor];
@@ -2176,6 +2229,8 @@ function handle(e){
 function change(e){
   const el=e.target,{field,eventActor,form,token,n,i,reserve,gear}=el.dataset;
   if(el.hasAttribute('data-schedule-person')){selectedCharacter=Number(el.value);render();return;}
+  if(el.hasAttribute('data-work-goal')){if(el.value!=='')sync({kind:'work-goal',value:el.dataset.workGoal,n:el.valueAsNumber});return;}
+  if(el.hasAttribute('data-worksite')){sync({kind:'worksite',i:Number(i),mode:el.dataset.worksite,value:el.value});return;}
   if(el.hasAttribute('data-duty')){sync({kind:'duty',i:Number(el.dataset.duty),value:el.value});return;}
   if(el.hasAttribute('data-companion')||el.hasAttribute('data-lesson')){
     selectedPersonExplicitly=true;
