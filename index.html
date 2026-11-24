@@ -496,6 +496,16 @@ function recruitUnlock(s){
   if(townRep(s)<1)return '需要石桥镇声望 1。';
   return '';
 }
+function rollRecruitRoots(random=Math.random){
+  const roll=random();
+  const count=roll<0.55?4:roll<0.82?3:roll<0.96?2:1;
+  const remaining=[...elements], selected=[];
+  for(let i=0;i<count;i++){
+    selected.push(remaining.splice(Math.floor(random()*remaining.length),1)[0]);
+  }
+  return elements.filter(element=>selected.includes(element)).join('、')
+    +['','灵根','双灵根','三灵根','伪灵根'][count];
+}
 function annualRecruit(s){
   if(s.annualRecruit?.year===year(s))return s.annualRecruit;
   const explored=fogTiles.filter(id=>s.flags['explored_'+id]).length;
@@ -506,11 +516,11 @@ function annualRecruit(s){
   const offset=(year(s)-1)%pool.length;
   const profiles=[...pool.slice(offset),...pool.slice(0,offset)].slice(0,count);
   const names=new Set(s.people.map(p=>p.name));
-  const candidates=profiles.map(([base,gift,stats,age,intro,trade,experience])=>{
+  const candidates=profiles.map(([base,,stats,age,intro,trade,experience])=>{
     let name=base;
     for(let suffix=2;names.has(name);suffix++)name=base+'·'+suffix;
     names.add(name);
-    return {name,gift,stats,age,intro,trade,experience};
+    return {name,gift:rollRecruitRoots(),stats,age,intro,trade,experience};
   });
   return s.annualRecruit={year:year(s),limit,candidates,chosen:[],listed:false};
 }
