@@ -237,11 +237,11 @@ const resources = {food:'口粮',herbs:'普通药材',stone:'灵石',main:'筑�
 const arts = {guard:'护身诀',stone:'飞石术',vine:'缠藤术',stream:'引流护行',pierce:'破甲剑',recover:'回息术',burn:'燃火术'};
 const elements=['金','木','水','火','土'];
 const manuals={
-  metal:{name:'《庚金剑诀》',element:'金',art:'pierce',bonus:'物攻 +2',master:'破甲剑削盾 12'},
-  wood:{name:'《青藤养息诀》',element:'木',art:'vine',bonus:'药圃每轮 +1 普通药材',master:'缠藤术消耗 4 灵力'},
-  water:{name:'《清泉回息诀》',element:'水',art:'recover',bonus:'灵力上限 +2、法防 +3',master:'回息术回复 22 气血'},
-  fire:{name:'《赤炉行火诀》',element:'火',art:'burn',bonus:'法攻 +3',master:'燃烧每轮伤害 5'},
-  earth:{name:'《厚土守元诀》',element:'土',art:'stone',bonus:'气血上限 +8、物防 +4',master:'飞石术消耗 5 灵力'}
+  metal:{intro:'以金气养剑，擅长近身斩击与破盾。',name:'《庚金剑诀》',element:'金',art:'pierce',bonus:'物攻 +2',master:'破甲剑削盾 8 → 12'},
+  wood:{intro:'以木气养护灵植，以藤蔓护住后排。',name:'《青藤养息诀》',element:'木',art:'vine',bonus:'药圃每轮 +1 普通药材',master:'缠藤术耗灵 5 → 4'},
+  water:{intro:'引清泉之气调息，适合抵挡术法和战中自疗。',name:'《清泉回息诀》',element:'水',art:'recover',bonus:'灵力上限 +2、法防 +3',master:'回息术回复 15 → 22 气血'},
+  fire:{intro:'以炉火炼化灵力，擅长法术伤害与持续灼烧。',name:'《赤炉行火诀》',element:'火',art:'burn',bonus:'法攻 +3',master:'燃烧每轮 25% 法攻 → 35% 法攻'},
+  earth:{intro:'以厚土之气护体，擅长扛住物理攻击和打断重击。',name:'《厚土守元诀》',element:'土',art:'stone',bonus:'气血上限 +8、物防 +4',master:'飞石术耗灵 6 → 5'}
 };
 const starterManual='《青崖吐纳法》', streamManual='《青崖引泉诀》';
 const roots=p=>elements.filter(element=>p.gift?.includes(element));
@@ -980,9 +980,9 @@ function combatStats(p){
     speed,hp,maxHp:hp,
     mp:Math.round((10+2*spirit)*(p.rank?1.5:1))+(p.charm==='jade'?6:0)+(mastered(p,manuals.water.name)?2:0)+(mastered(p,streamManual)?4:0),
     physicalAttack:Math.round(((p.weapon==='iron'?15:12)+body*0.5)*realm)+(mastered(p,manuals.metal.name)?2:0),
-    physicalDefense:Math.round(body*realm)+(mastered(p,manuals.earth.name)?4:0),
+    physicalDefense:Math.round(body*realm)+(mastered(p,manuals.earth.name)?4:0)+(mastered(p,starterManual)?2:0),
     spellAttack:Math.round((10+spirit*0.5)*realm)+(mastered(p,manuals.fire.name)?3:0),
-    spellDefense:Math.round(spirit*realm)+(mastered(p,manuals.water.name)?3:0)
+    spellDefense:Math.round(spirit*realm)+(mastered(p,manuals.water.name)?3:0)+(mastered(p,streamManual)?4:0)
   };
 }
 const artCosts={guard:5,stone:6,stream:5,vine:5,pierce:5,recover:5,burn:5};
@@ -1063,7 +1063,7 @@ function battleRound(s){
       const victim=intercept?.hp>0?intercept:target;
       const spell=enemy.spellHit&&!pounce;
       const power=((heavy||pounce)?enemy.heavy:enemy.hit)*(victim.rank?0.9:1)
-        *(guarded&&victim===target?0.5:1)*(victim===intercept&&mastered(s.people[victim.i],streamManual,6)?0.75:1);
+        *(guarded&&victim===target?(mastered(s.people[victim.i],starterManual,6)?0.4:0.5):1)*(victim===intercept&&mastered(s.people[victim.i],streamManual,6)?0.75:1);
       const damage=Math.max(1,damageAfterDefense(power,spell?victim.spellDefense:victim.physicalDefense)-(victim.heart?8:0));
       victim.heart=false;victim.hp=Math.max(0,victim.hp-damage);victim.down ||= !victim.hp;
       b.lines.push(enemy.name+'命中'+s.people[victim.i].name+'，造成 '+damage+(spell?' 法术':' 物理')+'伤害。'+(victim.down?' 倒地。':''));
@@ -1712,9 +1712,9 @@ function peopleMarkup(){
 function manualsMarkup(){
   const i=selectedCharacter??state.leader,p=state.people[i];
   const books=[
-    {name:starterManual,grade:'黄阶',art:'guard'},
+    {name:starterManual,grade:'黄阶',art:'guard',intro:'青云宗入门功法，以吐纳凝气护身。',bonus:'物防 +2',master:'护身诀减伤 50% → 60%'},
     ...Object.entries(manuals).map(([id,m])=>({...m,id,grade:'黄阶'})),
-    {name:streamManual,grade:'玄阶',art:'stream',bonus:'灵力上限 +4',master:'替同门承伤减免 25%'}
+    {name:streamManual,grade:'玄阶',art:'stream',intro:'借水势卸力，适合替同门承受重击。',bonus:'灵力上限 +4、法防 +4',master:'替同门挡招时额外减伤 25%'}
   ];
   const categories=[...elements,'通用'];
   const filters=categories.map(category=>btn(category,'manual-filter','data-value="'+category+'" aria-pressed="'+(category===manualCategory)+'"')).join('');
@@ -1722,8 +1722,8 @@ function manualsMarkup(){
     const known=own(p.mastery,book.name), current=p.technique===book.name;
     const points=Math.min(6,p.mastery[book.name]??0);
     const task=book.id?'manual':'read';
-    const reason=known?(current?'':free(state,i)?'':'修士尚未空闲')
-      :book.name===starterManual?'':jobSpec(state,task,[i],book.id??'').reason;
+    const spec=known||book.name===starterManual?null:jobSpec(state,task,[i],book.id??'');
+    const reason=known?(current?'':free(state,i)?'':'修士尚未空闲'):spec?.reason;
     const action=known?(current?'':btn('设为主修','technique','data-i="'+i+'" data-value="'+esc(book.name)+'"',reason))
       :book.name===starterManual?'':btn('开始学习','study-book','data-i="'+i+'" data-value="'+(book.id??'stream')+'"',reason);
     const studyJob=jobFor(state,i);
@@ -1731,14 +1731,14 @@ function manualsMarkup(){
     return '<article class="rpg-card manual-card'+(current?' current':'')+'"><small class="manual-meta">'+book.grade+' · '
       +(book.element?book.element+'系':'通用')+'</small><h3>'+book.name+'</h3>'
       +'<small>'+((book.name===streamManual)?'筑基 · 荒庙残卷':'炼气 · 宗门典籍')+'</small>'
-      +'<div>入门习得 '+arts[book.art]+'</div>'
-      +(book.bonus?'<small>熟练 · '+book.bonus+'</small><small>圆满 · '+book.master+'</small>':'')
+      +'<p>'+book.intro+'</p><div>习得术法 · '+arts[book.art]+'</div>'
+      +(book.bonus?'<small>主修熟练（3） · '+book.bonus+'</small><small>主修圆满（6） · '+book.master+'</small>':'')
       +(known?'<small>'+(current?'主修 · ':'已学 · ')+(points>=6?'圆满':points>=3?'熟练':'入门')+' '+points+'/6</small>'
         +'<div class="meter"><span style="width:'+points/6*100+'%"></span></div>'
-        :'<small>'+(studying?'学习中 · '+clock(studyJob.end):esc(reason||'可学习 · '+(task==='manual'?1:2)+' 分钟'))+'</small>')
+        :'<small>'+(studying?'学习中 · '+clock(studyJob.end):esc(reason||'可学习 · '+Math.round((spec?.duration??0)*60)+' 秒'))+'</small>')
       +(action&&!studying?'<div class="actions">'+action+'</div>':'')+'</article>';
   }).join('');
-  const artEffects={pierce:'目标有护盾时先削盾再普攻',recover:'自身气血不超过 40% 时回复，每场一次',burn:'造成 50% 法攻伤害，并燃烧两轮',guard:'重击命中前施放，减半本轮下一次受伤',stone:'先手打断重击，并造成 60% 法攻伤害',vine:'先手阻止敌人扑袭后排',stream:'重击前施放，替同门挡招'};
+  const artEffects={pierce:'目标有护盾时先削盾再普攻',recover:'自身气血不超过 40% 时回复，每场一次',burn:'造成 50% 法攻伤害，随后燃烧两轮，每轮 25% 法攻',guard:'抢在重击前护住自己，基础减伤 50%',stone:'先手打断重击，并造成 60% 法攻伤害',vine:'先手阻止敌人扑袭后排',stream:'重击前施放，替同门挡招'};
   const learned=p.known.map(id=>'<div class="rpg-art"><span class="rpg-art-icon" aria-hidden="true">'+arts[id][0]+'</span><div><b>'
     +arts[id]+'</b><small>'+artCost(p,id)+' 灵力 · '+artEffects[id]+'</small></div></div>').join('');
   return '<div class="row"><h2>宗门功法</h2><label>修习者 <select data-manual-person>'
