@@ -89,6 +89,7 @@ header{height:75px;display:flex;align-items:center;justify-content:space-between
 .town-window{width:min(900px,94vw);max-height:88vh;overflow:auto;color:var(--ink);background:var(--surface);border:1px solid #73866c;border-radius:14px;padding:20px}.town-window::backdrop{background:#000a}.town-window .town-header{position:sticky;top:-20px;background:var(--surface);z-index:2;padding:12px 0}.town-window .task-form{margin-top:12px}
 .manual-art{padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface-raised)}.manual-art>*{display:block}
 .dispatch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,78px),1fr));gap:7px;margin:9px 0}.dispatch-person{position:relative;min-width:0;aspect-ratio:1;display:grid;place-items:center;padding:2px}.dispatch-person[aria-pressed=true]{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);background:#2c3d2c}.dispatch-person strong{display:block;overflow-wrap:anywhere}.dispatch-person small{font-size:11px;color:var(--gold)}.dispatch-person .dispatch-tag{position:absolute;right:3px;top:2px;font-size:10px}.dispatch-person .dispatch-status{position:absolute;bottom:2px;left:2px;right:2px;line-height:1.15;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.map-avatar{position:absolute;z-index:3;display:grid;place-items:center;width:23px;height:23px;border-radius:50%;border:1px solid #edcf87;background:#283e33;color:#fff2c6;font-size:12px;font-weight:700;transform:translate(-50%,-50%);pointer-events:auto;transition:left .48s linear,top .48s linear}.map-avatar.is-travelling{background:#6a542e}
 </style>
 
 <dialog id="town-window" class="town-window" aria-label="石桥镇"></dialog>
@@ -761,10 +762,11 @@ function start(s,type,ids,arg='',pack=0,repeat=false){
   if(spec.reason)return spec.reason;
   s.jobs=s.jobs.filter(j=>!j.leisure||!j.people.some(i=>ids.includes(i)));
   spend(s,spec.cost,spec.useReserve);
-  if(s.townVisit&&ids.includes(s.townVisit.person))delete s.townVisit;
+  const departingTown=s.townVisit?.person;
+  if(ids.includes(departingTown))delete s.townVisit;
   if(type==='trade'&&spec.arg==='autumn')s.seasonClaims.autumn=year(s);
   if(type==='winter')s.seasonClaims.winter=year(s);
-  s.jobs.push({id:++s.serial,type,people:ids,qiBonus:takeQi(s,s.people[ids[0]],type),arg:spec.arg,pack,end:s.time+spec.duration*minute,
+  s.jobs.push({id:++s.serial,type,people:ids,started:s.time,townOrigin:ids.includes(departingTown)?departingTown:null,qiBonus:takeQi(s,s.people[ids[0]],type),arg:spec.arg,pack,end:s.time+spec.duration*minute,
     repeat:repeat&&['meditate','farm'].includes(type)});
   log(s,ids.map(i=>s.people[i].name).join('、')+'开始'+spec.label+'。');
 }
@@ -1550,6 +1552,51 @@ const mapTiles={
 const eventPlaces={beast:'hill',boundary:'hill',ford:'hill',lantern:'temple'};
 const mapRoads=[[3,5],[5,6],[3,8],[3,11],[11,13],[8,16],[16,24],[16,29],
   [24,30],[11,19],[19,20],[19,27],[27,34],[24,27]];
+function mapPath(from,to){
+  const queue=[[from]],seen=new Set([from]);
+  for(let i=0;i<queue.length;i++){
+    const path=queue[i],end=path.at(-1);
+    if(end===to)return path;
+    for(const [a,b] of mapRoads){
+      const next=a===end?b:b===end?a:null;
+      if(next===null||seen.has(next))continue;
+      seen.add(next);queue.push([...path,next]);
+    }
+  }
+  return [from];
+}
+const mapActivityPlaces={visitTown:'town',trade:'town',recruit:'town',town:'town',escort:'town',caravan:'town',
+  hill:'hill',seek:'hill',patrol:'hill',ape:'hill',hunt:'hill',trail:'hill',rain:'hill',
+  outer:'temple',temple:'temple',restore:'water',seal:'water',ditch:'water',canal:'water',clearRocks:'quarry'};
+function avatarPosition(s,i,time){
+  const job=jobFor(s,i);
+  const place=job&&(own(industries,job.arg)?job.arg:mapActivityPlaces[job.type]);
+  const target=Number(Object.keys(mapTiles).find(tile=>mapTiles[tile]===place));
+  const origin=job?.townOrigin===i?16:3;
+  const path=mapPath(origin,Number.isFinite(target)?target:s.townVisit?.person===i?16:3);
+  const stationary=(tile)=>({x:tile%7,y:Math.floor(tile/7),moving:false});
+  if(!job&&!s.townVisit)return stationary(3);
+  if(!job||job.end===null||!Number.isFinite(job.started)||path.length===1)return stationary(path.at(-1));
+  const p=Math.max(0,Math.min(1,(time-job.started)/Math.max(1,job.end-job.started)));
+  const waiting=job.type==='visitTown'||job.type==='hunt'||job.type==='ape'||job.type==='seek'&&!s.flags.trail||job.type==='rain'&&!s.seenEvents.includes('ford');
+  const progress=job.type==='visitTown'?p:p<.25?p*4:waiting||p<=.75?1:(1-p)*4;
+  const point=progress*(path.length-1),index=Math.floor(point),f=point-index;
+  const a=stationary(path[index]),b=stationary(path[index+1]??path[index]);
+  return {x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f,moving:progress<1};
+}
+function positionMapAvatars(nodes,time){
+  const offsets=new Map();
+  for(const node of nodes){
+    const pos=avatarPosition(state,Number(node.dataset.mapPerson),time);
+    const key=[pos.x,pos.y].join(',');
+    const offset=offsets.get(key)??0;offsets.set(key,offset+1);
+    const shift=pos.moving?offset*5:(offset%4-1.5)*22;
+    const lift=pos.moving?0:25+Math.floor(offset/4)*19;
+    node.style.left='calc('+((pos.x+.5)/7*100)+'% + '+shift+'px)';
+    node.style.top='calc('+((pos.y+.5)/5*100)+'% - '+lift+'px)';
+    node.classList.toggle('is-travelling',pos.moving);
+  }
+}
 function roadMarkup([from,to]){
   const x=from%7,y=Math.floor(from/7);
   const dx=to%7-x,dy=Math.floor(to/7)-y;
@@ -1737,7 +1784,7 @@ function assignmentMarkup(){
   if(selected==='sect')detail='<h3>青云宗</h3>'+btn('进入宗门建筑','view','data-value="dispatch"');
   else if(selected==='town')detail=townApproachMarkup();
   else if(selected)detail=pending.filter(e=>eventPlaces[e.id]===selected).map(e=>'<article class="pending">'+eventCard(e)+'</article>').join('')+assignmentPanel();
-  return '<h2>宗门地图</h2><div class="map-layout"><div><div class="map-scroll"><div class="map-grid">'+mapRoads.map(roadMarkup).join('')+tiles
+  return '<h2>宗门地图</h2><div class="map-layout"><div><div class="map-scroll"><div class="map-grid">'+mapRoads.map(roadMarkup).join('')+tiles+state.people.map((p,i)=>'<span class="map-avatar" data-map-person="'+i+'" title="'+esc(p.name)+'" aria-label="'+esc(p.name)+'">'+esc(Array.from(p.name)[0])+'</span>').join('')
     +'</div></div><p class="map-legend">虚线为道路 · ! 待处理事件</p></div><aside class="map-details">'+detail+'</aside></div>';
 }
 function dispatchPicker(team,visit=false){
@@ -2159,6 +2206,7 @@ function calendarMarkup(){
 }
 function clocks(){
   const now=state.time+(state.created?Math.min(offlineCap,Math.max(0,Date.now()-state.wall)):0);
+  positionMapAvatars(document.querySelectorAll('[data-map-person]'),now);
   for(const doc of [document,popup?.document].filter(Boolean)){
     for(const node of doc.querySelectorAll('[data-fatigue]')){
       const p=state.people[Number(node.dataset.fatigue)];
