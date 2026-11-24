@@ -269,7 +269,15 @@ const repairs = {
   plots:['扩建药圃',3,{wood:5,masonry:3},'种药位 +1'],
   furnace:['增建丹炉',4,{wood:3,masonry:6,stone:2},'炼丹位 +1']
 };
+const discoveries={
+  mist1:{name:'听风竹坞',mark:'竹',build:'搭设竹棚',gather:'采集竹材',item:'wood',base:5,bonus:2,materials:{masonry:3}},
+  mist2:{name:'白崖石涧',mark:'石',build:'铺设石径',gather:'采集石料',item:'masonry',base:5,bonus:2,materials:{wood:3}},
+  mist3:{name:'暮露药谷',mark:'药',build:'开辟药径',gather:'采摘药草',item:'herbs',base:5,bonus:3,materials:{wood:3,masonry:2}},
+  mist4:{name:'野栗坡',mark:'粮',build:'修建储粮棚',gather:'采集野栗',item:'food',base:7,bonus:3,materials:{wood:4}},
+  mist5:{name:'碎星矿脉',mark:'矿',build:'支护矿脉',gather:'开采灵石',item:'stone',base:2,bonus:1,materials:{wood:4,masonry:4}}
+};
 const industries={
+  ...discoveries,
   forest:{name:'松林伐木场',mark:'木',survey:'勘查松林',build:'搭建伐木棚',gather:'采伐木材',materials:{masonry:2},item:'wood',base:4,bonus:2,local:true},
   quarry:{name:'青石采石场',mark:'石',survey:'勘查石坡',build:'铺设采石道',gather:'开采石料',materials:{wood:2},item:'masonry',base:4,bonus:2,local:true},
   field:{name:'山下灵田',mark:'田',survey:'勘查灵田',build:'开垦灵田',gather:'采收药草',cost:2,item:'herbs',base:3,bonus:3},
@@ -407,7 +415,7 @@ function advanceFatigue(s,time){
   let changed=false;
   s.people.forEach((p,i)=>{
     const j=jobFor(s,i), forced=restingForFatigue(s,p);
-    const rate=j?(j.end===null?0:j.type==='patrol'||j.type==='harvest'&&j.arg==='mine'?10
+    const rate=j?(j.end===null?0:j.type==='patrol'||j.type==='harvest'&&(j.arg==='mine'||j.arg==='mist5')?10
       :['harvest','develop','repair','fortify'].includes(j.type)?7
       :study.has(j.type)||['manual','teach','transmit','apprentice','winter'].includes(j.type)?3:5)
       :forced||p.rest>s.time||!p.schedulePaused&&scheduleMode(s,p)==='rest'?-restRate(s.time):-4;
@@ -497,7 +505,7 @@ const trades={
 function tradeFor(type,arg){
   if(type==='farm')return 'farming';
   if(type==='brew'||own(productionRecipes,type))return 'alchemy';
-  if(type==='harvest'&&arg==='mine')return 'mining';
+  if(type==='harvest'&&(arg==='mine'||arg==='mist5'))return 'mining';
 }
 const tradeCount=(p,id)=>p.trades?.[id]??0;
 const tradeLevel=count=>count>=20?2:count>=5?1:0;
@@ -569,10 +577,10 @@ function jobSpec(s,type,ids,arg='',pack=0){
     case 'survey':case 'develop':case 'harvest':{
       if(arg==='quarry'&&s.flags.quarryRocks&&type!=='survey')return fail('先清理山道落石。');
       if(!own(industries,arg))return fail('请选择有效的产业地点。');
-      const site=industries[arg], surveyed=s.flags['survey_'+arg], built=s.flags['industry_'+arg];
+      const site=industries[arg], surveyed=(own(discoveries,arg)?s.flags['explored_'+arg]:s.flags['survey_'+arg]), built=s.flags['industry_'+arg];
       if(s.jobs.some(j=>j.arg===arg&&['survey','develop','harvest'].includes(j.type)))return fail('已有队伍在此作业。');
       if(type==='survey'){
-        if(surveyed)return fail('此处已勘查。');
+        if(own(discoveries,arg)||surveyed)return fail('此处已勘查或需从地图探索。');
         label=site.survey;
       }else{
         if(!surveyed)return fail('先派人勘查此处。');
@@ -713,7 +721,7 @@ function complete(s,j){
       break;
     }
     case 'escort':case 'caravan':rewardTownJob(s,j.type);break;
-    case 'explore':mark(s,'explored_'+j.arg);break;
+    case 'explore':mark(s,'explored_'+j.arg);log(s,'发现'+discoveries[j.arg].name+'，现可派人采集。');break;
     case 'clearRocks':s.flags.quarryRocks=false;s.stock.masonry+=2;break;
     case 'survey':
       mark(s,'survey_'+j.arg);
@@ -1324,9 +1332,9 @@ function personOptions(selected,includeNone=false){
 }
 function industryAction(type,id){
   const site=industries[id];
-  return site[{survey:'survey',develop:'build',harvest:'gather'}[type]];
+  return site[{explore:'explore',survey:'survey',develop:'build',harvest:'gather'}[type]]??tasks[type][0];
 }
-const fogTiles=['mist1','mist2','mist3','mist4','mist5'];
+const fogTiles=Object.keys(discoveries);
 const mapTiles={
   3:'sect',5:'hill',6:'mist1',8:'forest',11:'quarry',13:'mist2',16:'town',
   19:'temple',20:'mist3',24:'field',27:'mist4',29:'mine',30:'water',34:'mist5'
@@ -1345,7 +1353,7 @@ const buildingActions={
   ...Object.fromEntries(Object.entries(industries).map(([id,site])=>[id,{
     name:site.name,mark:site.mark,purpose:'产出'+resources[site.item],tasks:['survey.'+id,'develop.'+id,'harvest.'+id]
   }])),
-  ...Object.fromEntries(fogTiles.map(id=>[id,{name:'未探索地块',mark:'?',purpose:'派弟子勘查以揭开迷雾。',tasks:['explore.'+id]}])),
+  ...Object.fromEntries(fogTiles.map(id=>[id,{name:discoveries[id].name,mark:'?',purpose:'派弟子勘查以揭开迷雾。',tasks:['explore.'+id,'develop.'+id,'harvest.'+id]}])),
   study:{name:'静室',mark:'静',purpose:'修行、术法与冲关',tasks:['meditate','break','repair.study']},
   farm:{name:'药圃',mark:'药',purpose:'种药与培育主药',tasks:['farm','repair.farm','repair.plots']},
   workshop:{name:'炼器工坊',mark:'器',purpose:'打造武器与护身物',tasks:['repair.workshop',...Object.keys(forgeRecipes).map(id=>'forge.'+id)]},
@@ -1372,6 +1380,7 @@ function taskChoices(){
     if(type==='explore')return !f['explored_'+area];
     if(type==='clearRocks')return !!f.quarryRocks;
     if(own(industries,area)){
+      if(own(discoveries,area))return !!f['explored_'+area]&&(type==='harvest'||type==='develop'&&!f['industry_'+area]);
       if(type==='survey')return !f['survey_'+area];
       if(type==='develop')return !!f['survey_'+area]&&!f['industry_'+area];
       return !!f['survey_'+area];
@@ -1465,14 +1474,13 @@ function assignmentMarkup(){
   const pending=state.eventQueue.filter(e=>own(eventPlaces,e.id));
   const tiles=Object.entries(mapTiles).map(([index,id])=>{
     const i=Number(index), fog=fogTiles.includes(id)&&!state.flags['explored_'+id];
-    const name=id==='sect'?'青云宗':fog?'未探索 '+id.slice(4):fogTiles.includes(id)?'已勘查 '+id.slice(4):buildingActions[id].name;
+    const name=id==='sect'?'青云宗':fog?'未探索 '+id.slice(4):buildingActions[id].name;
     return '<button class="map-tile'+(fog?' is-fog':'')+'" type="button" data-kind="map-tile" data-n="'+i
       +'" style="grid-area:'+(Math.floor(i/7)+1)+' / '+(i%7+1)+'" aria-pressed="'+(selectedTile===i)+'">'+name
       +((id==='quarry'&&state.flags.quarryRocks||pending.some(e=>eventPlaces[e.id]===id))?'<span class="map-alert" aria-label="待处理事件">!</span>':'')+'</button>';
   }).join('');
   let detail='';
   if(selected==='sect')detail='<h3>青云宗</h3>'+btn('进入宗门建筑','view','data-value="dispatch"');
-  else if(fogTiles.includes(selected)&&state.flags['explored_'+selected])detail='<h3>已勘查</h3><p class="muted">弟子已探明地形，这里暂无线索。</p>';
   else if(selected)detail=pending.filter(e=>eventPlaces[e.id]===selected).map(e=>'<article class="pending">'+eventCard(e)+'</article>').join('')+assignmentPanel();
   return '<h2>宗门地图</h2><div class="map-layout"><div><div class="map-scroll"><div class="map-grid">'+mapRoads.map(roadMarkup).join('')+tiles
     +'</div></div><p class="map-legend">虚线为道路 · ! 待处理事件</p></div><aside class="map-details">'+detail+'</aside></div>';
@@ -1513,11 +1521,11 @@ function assignmentPanel(){
   if(selectedBuilding==='gate')html+='<p class="muted">常住 '+state.people.length+' / '+capacity(state)+' 人</p>';
   if(selectedBuilding==='gate')html+='<p class="muted">'+(state.flags.gateFortified?'围栏已加固':'加固围栏 5 木材、3 石料')+' · 值守每年一次，胜获 2 灵石</p>';
   if(own(industries,selectedBuilding)){
-    const site=industries[selectedBuilding], surveyed=state.flags['survey_'+selectedBuilding], built=state.flags['industry_'+selectedBuilding];
+    const site=industries[selectedBuilding], surveyed=own(discoveries,selectedBuilding)?state.flags['explored_'+selectedBuilding]:state.flags['survey_'+selectedBuilding], built=state.flags['industry_'+selectedBuilding];
     html+='<p class="muted">'+(built?'已整修 · ':'')+(surveyed?'每趟产出 '+(site.base+(built?site.bonus:0))+' '+resources[site.item]
-      +(built?' · 可在人物页安排常驻管事。':' · 整修后产量提高。'):'先勘查，之后可派人采集。')+'</p>';
+      +(built?(own(duties,selectedBuilding)?' · 可安排常驻管事。':''):' · 整修后产量提高。'):'先勘查，之后可派人采集。')+'</p>';
   }
-  html+='<div class="task-form"><h3>'+building.name+'</h3>';
+  html+='<div class="task-form"><h3>'+(own(discoveries,selectedBuilding)&&!state.flags['explored_'+selectedBuilding]?'未探索地块':building.name)+'</h3>';
   if(selectedBuilding==='farm'&&season(state)===0&&state.seasonClaims.spring!==year(state))
     html+='<div class="room-action">'+btn('春季选种 · 2 普通药材','seed','',missing(state,{herbs:2}))+'</div>';
   if(selectedBuilding==='water')html+=waterContract();
