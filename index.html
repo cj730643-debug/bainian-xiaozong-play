@@ -296,10 +296,25 @@ const rootLabel=p=>{
   return list.length>1?list.join('、')+({2:'双灵根',3:'三灵根',4:'伪灵根'}[list.length]??'灵根'):p.gift||'灵根未定';
 };
 const cultivation=p=>Math.round((5+p.stats[0])/Math.max(1,roots(p).length)*(mastered(p,starterManual,6)?1.2:mastered(p,starterManual)?1.1:1));
-const mastered=(p,name,level=3)=>p.technique===name&&p.mastery[name]>=level;
+const manualSlots=['修炼功法','战斗功法','身法功法'];
+function manualSlot(name){
+  if(name===starterManual)return manualSlots[0];
+  return Object.values(manuals).find(book=>book.name===name)?.category??manualSlots[1];
+}
+function mainManuals(p){
+  if(p.mainManuals)return p.mainManuals;
+  const slots={};
+  if(own(p.mastery,starterManual))slots[manualSlots[0]]=starterManual;
+  if(p.technique&&own(p.mastery,p.technique))slots[manualSlot(p.technique)]=p.technique;
+  return slots;
+}
+function setMainManual(p,name){
+  p.mainManuals={...mainManuals(p),[manualSlot(name)]:name};
+}
+const mastered=(p,name,level=3)=>mainManuals(p)[manualSlot(name)]===name&&p.mastery[name]>=level;
 function learnManual(p,name,art){
   p.mastery[name]??=0;
-  p.technique=name;
+  setMainManual(p,name);
   if(art&&!p.known.includes(art))p.known.push(art);
 };
 const forgeRecipes={
@@ -829,7 +844,7 @@ function jobSpec(s,type,ids,arg='',pack=0){
     }
     case 'winter':
       if(season(s)!==3||s.seasonClaims.winter===year(s))return fail('围炉讲法每年冬季限一次。');
-      if((p.mastery[p.technique]||0)<3)return fail('授课者的当前功法需达到熟练。');
+      if(!Object.values(mainManuals(p)).some(name=>p.mastery[name]>=3))return fail('授课者的当前功法需达到熟练。');
       break;
     case 'teach': if(!p.rank||members[1].rank||s.legacy)return fail('授徒需要一名筑基修士和一名炼气后辈，限一次。');break;
   }
@@ -925,7 +940,7 @@ function complete(s,j){
       if(!p.rank&&s.route==='borrow'&&s.flags.restored&&s.uses<5){s.uses++;gain+=2;}
       const previous=p.points;addXp(p,Math.max(1,Math.round(gain*talentFactor(p,'focus','restless'))));
       if(p.points>previous)log(s,p.name+'晋升至'+rankName(p)+'，获得 '+(p.points-previous)+' 点五维。');
-      p.mastery[p.technique]++;
+      for(const name of Object.values(mainManuals(p)))p.mastery[name]++;
       s.studyRounds++;
       if(s.studyRounds>=1&&!p.rank)queue(s,'echo',j.people);
       if(s.studyRounds>=3&&!p.rank)queue(s,'notes',j.people);
@@ -1212,7 +1227,7 @@ const enemies = {
 function combatStats(p){
   const [,,body,speed,spirit]=p.stats;
   const earth=mastered(p,manuals.earth.name), water=mastered(p,manuals.water.name);
-  const stream=mastered(p,streamManual), starter=mastered(p,starterManual);
+  const stream=mastered(p,streamManual);
   const hp=Math.round((60+body*8)*(p.rank?1.4:1)*(earth?1.1:1));
   const realm=p.rank?1.25:1;
   return {
@@ -1220,7 +1235,7 @@ function combatStats(p){
     speed:Number((speed*(mastered(p,manuals.cloudstep.name,6)?1.6:mastered(p,manuals.cloudstep.name)?1.3:1)*talentFactor(p,'swift')).toFixed(2)),hp,maxHp:hp,
     mp:Math.round((10+2*spirit)*(p.rank?1.5:1)*(water?1.1:stream?1.2:1)*(p.charm==='jade'?1.3:1)),
     physicalAttack:Math.round(((p.weapon==='iron'?15:p.weapon==='bow'?10:12)+body*0.5)*realm*(mastered(p,manuals.metal.name)?1.15:1)),
-    physicalDefense:Math.round(body*realm*(earth?1.35:starter?1.2:1)*talentFactor(p,'sturdy','frail')),
+    physicalDefense:Math.round(body*realm*(earth?1.35:1)*talentFactor(p,'sturdy','frail')),
     spellAttack:Math.round((10+spirit*0.5)*realm*(mastered(p,manuals.fire.name)?1.2:1)),
     spellDefense:Math.round(spirit*realm*(water?1.25:stream?1.3:1)*talentFactor(p,'clear'))
   };
@@ -1535,7 +1550,7 @@ function dispatch(s,a){
     case 'root':
       if(p&&a.i===s.leader&&!p.gift&&elements.includes(a.value)){p.gift=a.value+'灵根';return;}
       break;
-    case 'technique':if(p&&free(s,a.i)&&own(p.mastery,a.value)){p.technique=a.value;return;}break;
+    case 'technique':if(p&&free(s,a.i)&&own(p.mastery,a.value)){setMainManual(p,a.value);return;}break;
     case 'gear':{
       if(!p||!free(s,a.i)||!['weapon','charm'].includes(a.slot))break;
       const choices=a.slot==='weapon'?['wood','iron','bow']:['','heart','jade'];
@@ -2229,7 +2244,7 @@ function peopleMarkup(){
     +'<section class="rpg-card"><h4>五维属性</h4><div class="character-stats">'
     +p.stats.map((n,k)=>'<div><span>'+attributes[k]+'</span><b>'+n+'</b></div>').join('')+'</div>'+growMarkup(p,i)+'</section>'
     +'<section class="rpg-card"><h4>装备槽</h4><div class="rpg-slots">'+equipment+'</div></section>'
-    +'<div class="row"><small>主修 '+esc(p.technique)+'</small>'+btn('查看功法','jump','data-value="manual-page"')+'</div></article></div>';
+    +'<div class="row"><div>'+mainManualsMarkup(p)+'</div>'+btn('查看功法','jump','data-value="manual-page"')+'</div></article></div>';
 }
 function artDescription(p,id){
   const effects={
@@ -2243,10 +2258,14 @@ function artDescription(p,id){
   };
   return '<b>'+arts[id]+'</b><small>'+artCost(p,id)+' 灵力 · '+effects[id]+'</small>';
 }
+function mainManualsMarkup(p){
+  const slots=mainManuals(p);
+  return manualSlots.map(slot=>'<small>'+slot+' · '+esc(slots[slot]??'未主修')+'</small>').join('');
+}
 function manualsMarkup(){
   const i=selectedCharacter??state.leader,p=state.people[i];
   const books=[
-    {name:starterManual,category:'修炼功法',grade:'黄阶',art:'guard',intro:'青云宗入门功法，以吐纳凝气护身。',bonus:'静修修为 +10%、物防 +20%',master:'静修修为总加成 +20%、护身诀减伤 50% → 60%'},
+    {name:starterManual,category:'修炼功法',grade:'黄阶',art:'guard',intro:'青云宗入门功法，以吐纳凝气护身。',bonus:'静修修为 +10%',master:'静修修为总加成 +20%、护身诀减伤 50% → 60%'},
     ...Object.entries(manuals).map(([id,m])=>({...m,id,grade:'黄阶'})),
     {name:streamManual,grade:'玄阶',art:'stream',intro:'借水势卸力，适合替同门承受重击。',bonus:'灵力上限 +20%、法防 +30%',master:'替同门挡招时额外减伤 25%'}
   ];
@@ -2256,12 +2275,12 @@ function manualsMarkup(){
     (manualCategory==='全部'||(book.category??'战斗功法')===manualCategory)
     &&(manualElement==='全部'||(book.element??'通用')===manualElement)
   ).map(book=>{
-    const known=own(p.mastery,book.name), current=p.technique===book.name;
+    const known=own(p.mastery,book.name), current=mainManuals(p)[manualSlot(book.name)]===book.name;
     const points=Math.min(6,p.mastery[book.name]??0);
     const task=book.id?'manual':'read';
     const spec=known||book.name===starterManual?null:jobSpec(state,task,[i],book.id??'');
     const reason=known?(current?'':free(state,i)?'':'修士尚未空闲'):spec?.reason;
-    const action=known?(current?'':btn('设为主修','technique','data-i="'+i+'" data-value="'+esc(book.name)+'"',reason))
+    const action=known?(current?'':btn('设为本类主修','technique','data-i="'+i+'" data-value="'+esc(book.name)+'"',reason))
       :book.name===starterManual?'':btn('开始学习','study-book','data-i="'+i+'" data-value="'+(book.id??'stream')+'"',reason);
     const studyJob=jobFor(state,i);
     const studying=!known&&studyJob&&(task==='manual'?studyJob.type===task&&studyJob.arg===book.id:book.name===streamManual&&studyJob.type==='read');
@@ -2278,6 +2297,7 @@ function manualsMarkup(){
   const learned=p.known.map(id=>'<div class="rpg-art"><span class="rpg-art-icon" aria-hidden="true">'+arts[id][0]+'</span><div>'+artDescription(p,id)+'</div></div>').join('');
   return '<div class="row"><h2>宗门功法</h2><label>修习者 <select data-manual-person>'
     +personOptions(i)+'</select></label></div><small>'+esc(rootLabel(p))+' · '+rankName(p)+'</small>'
+    +'<div class="rpg-card">'+mainManualsMarkup(p)+'<small>每轮静修会积累三类当前主修功法的熟练度。</small></div>'
     +filters('用途',['全部','修炼功法','战斗功法','身法功法'],'manual-filter',manualCategory)
     +filters('属性',['全部',...elements,'通用'],'manual-element',manualElement)
     +'<div class="manual-grid">'+(cards||'<p class="muted">这个组合暂无功法。</p>')+'</div><section class="rpg-card manual-skills"><h4>已学术法</h4><div class="rpg-arts">'+learned+'</div></section>';
