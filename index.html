@@ -160,6 +160,8 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
 .forge-slot{display:grid;place-items:center;aspect-ratio:1;border:1px solid var(--line);border-radius:7px;background:#e3e9dc}
 .forge-slot.empty{border-style:dashed;background:transparent}.forge-reason{color:#8a3b2e}.forge-detail details{margin-top:12px}
 @media(max-width:760px){.forge-workbench{grid-template-columns:1fr}}
+.forge-orders details,.division-list details{margin:8px 0;padding:8px;border:1px solid var(--line);border-radius:6px}
+.forge-orders input,.forge-detail #forge-new-quantity{width:76px}
 </style>
 
 <dialog id="recruit-event" class="town-window" aria-label="招徒名册"></dialog>
@@ -1155,7 +1157,20 @@ function complete(s,j){
       if(s.ditch===2){mark(s,'waterRecord','守泉人水脉记录');log(s,'旧渠复流，石桥镇的枯井重新出水。');}
       break;
     case 'canal':s.stock.herbs+=4;break;
-    case 'forge':s.gear[j.arg]++;break;
+    case 'forge':{
+      s.gear[j.arg]++;
+      const order=s.forgeOrders?.find(item=>item.id===j.forgeOrder);
+      if(order?.mode==='count'){
+        order.done++;
+        if(order.done>=order.target){
+          s.forgeHistory??=[];
+          s.forgeHistory.unshift({...order});
+          s.forgeHistory.length=Math.min(s.forgeHistory.length,20);
+          s.forgeOrders=s.forgeOrders.filter(item=>item.id!==order.id);
+        }
+      }
+      break;
+    }
     case 'repair':s.built[j.arg]=j.arg==='farm'?true:(Number(s.built[j.arg])||0)+1;break;
     case 'visitTown':s.townVisit={id:j.id,person:j.people[0],people:j.people,cargo:j.cargo};break;
     case 'recruit':{
@@ -1198,96 +1213,96 @@ function scheduledIndustryReason(s,industry){
   if(available(s,'food')<4)return '可动用口粮不足 4';
   return '';
 }
+const freeWorkModes=['study','farm','smith','timber','masonry','starMining','mine','field','heal'];
+const canListWork=(s,mode)=>freeWorkModes.includes(mode)&&visibleDuty(s,mode)&&(mode!=='smith'||!!s.built.workshop);
+function listFreeWork(p){
+  return p.freeWork??(freeWorkModes.includes(p.duty)?[p.duty]:[]);
+}
+function initOrderData(s){
+  s.forgeOrders??=Object.keys(forgeRecipes).filter(id=>stockGoal(s,id)>0)
+    .map(id=>({id:++s.serial,recipe:id,mode:'stock',target:stockGoal(s,id),done:0,paused:false}));
+  for(const p of s.people)p.freeWork??=listFreeWork(p);
+}
+function forgeInProgress(s,id){
+  return s.jobs.filter(job=>job.type==='forge'&&job.arg===id).length;
+}
+function orderNeedsWork(s,order){
+  return order.mode==='stock'?s.gear[order.recipe]+forgeInProgress(s,order.recipe)<order.target:order.done<order.target;
+}
+function forgeOrderReason(s,order){
+  if(order.paused)return '已暂停';
+  if(!orderNeedsWork(s,order))return order.mode==='stock'?'库存达标':'已完成';
+  if(!s.built.workshop)return '炼器工坊尚未建成';
+  if(s.jobs.some(job=>job.type==='forge'))return '工坊工位已满';
+  return missing(s,forgeRecipes[order.recipe].cost);
+}
+function plannedWorkMode(s,p){
+  const mode=scheduleMode(s,p);
+  return mode==='duty'?(p.dutyPaused?'':p.duty):mode;
+}
+function workAttempt(s,i,mode){
+  const p=s.people[i];
+  const blocked=reason=>({reason});
+  if(!visibleDuty(s,mode))return blocked('请先勘查采集地点');
+  if(mode==='smith'){
+    if(!s.built.workshop)return blocked('炼器工坊尚未建成');
+    const needs=(s.forgeOrders??[]).filter(order=>!order.paused&&orderNeedsWork(s,order));
+    const order=needs.find(item=>!forgeOrderReason(s,item));
+    if(!order)return blocked(needs.length?forgeOrderReason(s,needs[0]):'暂无可接生产单');
+    const spec=jobSpec(s,'forge',[i],order.recipe);
+    return {task:'forge',arg:order.recipe,order:order.id,reason:spec.reason};
+  }
+  if(own(materialDuties,mode)){
+    const [id]=materialDuties[mode],site=materialSite(s,p,mode);
+    if(plannedMaterial(s,id)>=stockGoal(s,id))return blocked(resources[id]+'库存目标已足');
+    return {task:'harvest',arg:site,reason:(mode==='starMining'?scheduledIndustryReason(s,site):'')||jobSpec(s,'harvest',[i],site).reason};
+  }
+  if(mode==='heal'){
+    const needs=Object.keys(productionRecipes).filter(id=>needsBrew(s,id));
+    const task=needs.find(id=>!jobSpec(s,id,[i]).reason);
+    return task?{task,reason:''}:blocked(needs.length?jobSpec(s,needs[0],[i]).reason:'丹药库存目标已足');
+  }
+  const [,scheduled,industry]=scheduledWork[mode]??[];
+  const task=mode==='study'?'meditate':scheduled;
+  if(!task)return blocked('');
+  if(industry&&scheduledIndustryReason(s,industry))return blocked(scheduledIndustryReason(s,industry));
+  if(task==='patrol'&&available(s,'food')<4)return blocked('可动用口粮不足 4');
+  if(task==='patrol'&&s.jobs.some(job=>job.type==='patrol'))return blocked('已有弟子巡山');
+  return {task,arg:industry,reason:jobSpec(s,task,[i],industry).reason};
+}
 function scheduleWaitReason(s,i){
-  const p=s.people[i],mode=scheduleMode(s,p),workMode=mode==='duty'?p.duty:mode;
+  const p=s.people[i],mode=plannedWorkMode(s,p);
   if(p.schedulePaused)return '自动安排已暂停';
   if((s.townVisit?.people??[s.townVisit?.person]).includes(i))return '在石桥镇，返回山门后继续排班';
-  if(p.dutyPaused&&(mode==='duty'||workMode===p.duty&&own(materialDuties,workMode)))return '职务已暂停';
-  if(!visibleDuty(s,workMode))return '请先勘查采集地点';
-  if(own(materialDuties,workMode)){
-    const [id]=materialDuties[workMode];
-    if(plannedMaterial(s,id)>=stockGoal(s,id))return resources[id]+'库存目标已足';
-    const site=materialSite(s,p,workMode);
-    return (workMode==='starMining'?scheduledIndustryReason(s,site):'')||jobSpec(s,'harvest',[i],site).reason;
-  }
-  if(workMode==='smith'){
-    if(!s.built.workshop)return '炼器工坊尚未建成';
-    const choices=Object.keys(forgeRecipes).filter(id=>s.gear[id]+s.jobs.filter(j=>j.type==='forge'&&j.arg===id).length<stockGoal(s,id));
-    if(!choices.length)return '炼器库存目标已足';
-    return jobSpec(s,'forge',[i],choices[0]).reason;
-  }
-  if(workMode==='heal'){
-    const choices=Object.keys(productionRecipes).filter(id=>needsBrew(s,id));
-    return choices.length?jobSpec(s,choices[0],[i]).reason:'丹药库存目标已足';
-  }
-  const [,,industry]=scheduledWork[workMode]??[];
-  const task=mode==='study'?'meditate':scheduledWork[workMode]?.[1];
-  if(!task)return mode==='duty'?'未安排常驻职务':'';
-  if(industry)return scheduledIndustryReason(s,industry)||jobSpec(s,task,[i],industry).reason;
-  if(task==='patrol'&&available(s,'food')<4)return '可动用口粮不足 4';
-  if(task==='patrol'&&s.jobs.some(j=>j.type==='patrol'))return '已有弟子巡山';
-  return jobSpec(s,task,[i]).reason;
+  if(mode==='free')return '自由 · 暂无可做的工作';
+  if(!mode&&scheduleMode(s,p)==='duty')return p.dutyPaused?'职务已暂停':'未安排常驻职务';
+  return workAttempt(s,i,mode).reason;
 }
 function assignDuties(s){
   let changed=false;
-  const order=s.people.map((p,i)=>({p,i,leisure:scheduleMode(s,p)==='free'}));
-  order.sort((a,b)=>Number(a.leisure)-Number(b.leisure));
-  order.forEach(({p,i})=>{
-    if(!free(s,i)||jobFor(s,i)||p.schedulePaused||(s.townVisit?.people??[s.townVisit?.person]).includes(i))return;
-    const mode=scheduleMode(s,p);
-    const duty=mode==='duty'&&!p.dutyPaused&&own(duties,p.duty)?duties[p.duty]:null;
-    const alchemy=mode==='heal'||duty?.[1]==='heal';
-    const recipe=alchemy&&Object.keys(productionRecipes).find(id=>needsBrew(s,id)&&!jobSpec(s,id,[i]).reason);
-    if(mode==='free'||alchemy&&!recipe){
-      if(fatigueOf(p)>=60){p.fatigueRest=true;changed=true;return;}
-      const farmReason=available(s,'food')<4?'口粮不足'
-        :roots(p).includes('木')?'木灵根擅长照料药草'
-        :available(s,'herbs')<3?'可用药材不足':'静室暂时无法使用';
-      const needsPractice=p.rank||p.xp<100;
-      const practiceReason=p.rank?'继续精进修为':'继续积累修为';
-      const farm=['farm',farmReason], practice=['meditate',practiceReason];
-      const choices=farmReason==='静室暂时无法使用'?[practice,farm]:[farm,practice];
-      const chosen=choices.find(([task])=>(task!=='meditate'||needsPractice)&&!jobSpec(s,task,[i]).reason);
-      if(chosen&&!start(s,chosen[0],[i])){
-        const job=jobFor(s,i);
-        job.leisure=true;
-        job.leisureReason=chosen[0]==='farm'&&!needsPractice&&farmReason==='静室暂时无法使用'
-          ?'炼气修为已圆满':chosen[1];
-        changed=true;
-      }
-      return;
-    }
-    const workMode=mode==='duty'?p.duty:mode;
-    if(!visibleDuty(s,workMode))return;
-    if(own(materialDuties,workMode)||workMode==='smith'){
-      if(p.duty===workMode&&p.dutyPaused)return;
-      let task,arg;
-      if(workMode==='smith'){
-        task='forge';
-        arg=Object.keys(forgeRecipes).find(id=>s.gear[id]+s.jobs.filter(j=>j.type==='forge'&&j.arg===id).length<stockGoal(s,id)
-          &&!jobSpec(s,task,[i],id).reason);
-      }else{
-        task='harvest';
-        const [resource]=materialDuties[workMode];
-        if(plannedMaterial(s,resource)<stockGoal(s,resource)){
-          const site=materialSite(s,p,workMode);
-          if(workMode!=='starMining'||!scheduledIndustryReason(s,site))arg=site;
-        }
-      }
-      if(arg&&!start(s,task,[i],arg)){jobFor(s,i).duty=true;changed=true;}
-      return;
-    }
-    const work=scheduledWork[mode];
-    const task=recipe||(mode==='study'?'meditate':work?.[1]??duty?.[1]);
-    if(!task)return;
-    const industry=work?.[2]??(duty&&own(industries,p.duty)?p.duty:null);
-    if(industry&&scheduledIndustryReason(s,industry))return;
-    if(task==='patrol'&&(available(s,'food')<4||s.jobs.some(j=>j.type==='patrol')))return;
-    if(!start(s,task,[i],industry??'')){
-      jobFor(s,i).duty=!!duty;
-      changed=true;
-    }
+  const order=s.people.map((p,i)=>{
+    const mode=plannedWorkMode(s,p);
+    const smith=mode==='smith'||mode==='free'&&listFreeWork(p).includes('smith');
+    return {p,i,mode,smith};
   });
+  order.sort((a,b)=>Number(a.mode==='free')-Number(b.mode==='free')
+    ||Number(b.smith)-Number(a.smith)||(a.smith&&b.smith?tradeCount(b.p,'forging')-tradeCount(a.p,'forging'):0)||a.i-b.i);
+  for(const {p,i,mode} of order){
+    if(!free(s,i)||jobFor(s,i)||p.schedulePaused||(s.townVisit?.people??[s.townVisit?.person]).includes(i))continue;
+    const choices=mode==='free'?listFreeWork(p).filter(work=>canListWork(s,work)):[mode];
+    let firstReason='';
+    for(const work of choices){
+      const plan=workAttempt(s,i,work);
+      if(plan.reason||!plan.task){firstReason||=plan.reason;continue;}
+      if(start(s,plan.task,[i],plan.arg??''))continue;
+      const job=jobFor(s,i);
+      if(plan.order!==undefined)job.forgeOrder=plan.order;
+      job.duty=scheduleMode(s,p)==='duty';
+      if(mode==='free'){job.freeWork=true;job.freeReason=firstReason;}
+      changed=true;
+      break;
+    }
+  }
   return changed;
 }
 function tick(s,wall){
@@ -1692,6 +1707,43 @@ function dispatch(s,a){
       p.duty=a.value;p.dutyPaused=false;
       return;
     }
+    case 'forge-order-add':{
+      if(!s.created||!s.built.workshop||!own(forgeRecipes,a.recipe)||!['count','stock'].includes(a.mode)
+        ||!Number.isSafeInteger(a.target)||a.target<1||a.target>999)return '请输入 1 至 999 的订单数量。';
+      const current=a.mode==='stock'&&s.forgeOrders.find(item=>item.mode==='stock'&&item.recipe===a.recipe);
+      if(current){current.target=a.target;return;}
+      s.forgeOrders.push({id:++s.serial,recipe:a.recipe,mode:a.mode,target:a.target,done:0,paused:false});
+      return;
+    }
+    case 'forge-order-edit':{
+      const at=s.forgeOrders?.findIndex(order=>order.id===a.token)??-1;
+      if(at<0)return '订单已结束。';
+      const item=s.forgeOrders[at];
+      if(a.value==='toggle')item.paused=!item.paused;
+      else if(a.value==='cancel')s.forgeOrders.splice(at,1);
+      else if(a.value==='target'){
+        const minimum=item.mode==='count'?item.done+1:1;
+        if(!Number.isSafeInteger(a.target)||a.target<minimum||a.target>999)return '订单数量无效。';
+        item.target=a.target;
+      }else if(a.value==='up'||a.value==='down'){
+        const to=at+(a.value==='up'?-1:1);
+        if(to>=0&&to<s.forgeOrders.length)[s.forgeOrders[at],s.forgeOrders[to]]=[s.forgeOrders[to],item];
+      }else return '未知订单操作。';
+      return;
+    }
+    case 'free-work-edit':{
+      if(!p)return '请选择有效弟子。';
+      const list=p.freeWork??=[...listFreeWork(p)];
+      if(a.value==='add'){
+        if(!canListWork(s,a.work)||list.includes(a.work))return '该工作无法加入。';
+        list.push(a.work);
+      }else if(Number.isInteger(a.n)&&a.n>=0&&a.n<list.length){
+        if(a.value==='remove')list.splice(a.n,1);
+        else if(a.value==='up'&&a.n>0)[list[a.n-1],list[a.n]]=[list[a.n],list[a.n-1]];
+        else return '该工作无法调整。';
+      }else return '未找到该工作。';
+      return;
+    }
     case 'work-goal':
       if(s.created&&Number.isSafeInteger(a.n)&&a.n>=0&&(['wood','masonry','starOre'].includes(a.value)||own(forgeRecipes,a.value))){
         s.workGoals??={};s.workGoals[a.value]=a.n;return;
@@ -1909,9 +1961,10 @@ function apply(current,command,wall){
   next.gear.starSword??=0;
   next.gear.starArmor??=0;
   for(const manual of Object.values(manuals))if(!next.archive.includes(manual.name))next.archive.push(manual.name);
+  if(next.created)initOrderData(next);
   let changed=tick(next,wall);
   const message=command&&command.generation!==(next.generation??0)?'存档已重开，请重新操作。':command?dispatch(next,command):'';
-  if(next.created){annualRecruit(next);trackWeekRanks(next);}
+  if(next.created){initOrderData(next);annualRecruit(next);trackWeekRanks(next);}
   if(next.created&& !next.battle){
     const forced=next.eventQueue.find(event=>event.surprised||event.autoBattle);
     if(forced){battleStart(next,forced.token,defaultFormation(next,forced),forced.surprised);changed=true;}
@@ -2394,8 +2447,30 @@ function forgePanel(){
     +'<h4>材料</h4><div class="forge-slots">'+slots+'</div><h4>炼器弟子</h4>'+dispatchPicker(false)
     +(running?'<p>正在打造 '+gearNames[running.arg]+' · '+clock(running.end)+'</p>':'')
     +(spec.reason?'<p class="forge-reason">'+esc(spec.reason)+'</p>':'')+btn('开始炼器','assign','class="gold"',spec.reason)
-    +'<details data-detail="forge-stock"><summary>自动炼器库存目标 · '+gearNames[id]+'</summary><p>在库 '+state.gear[id]
-    +' · 在制 '+Number(running?.arg===id)+'</p>'+workGoalInput(state,id)+'</details></div></section>';
+    +'<div class="actions"><label>订单数量 <input id="forge-new-quantity" type="number" min="1" max="999" value="1"></label>'
+    +btn('加入订单','forge-order-add','data-mode="count" data-value="'+id+'"')
+    +btn('维持库存','forge-order-add','data-mode="stock" data-value="'+id+'"')+'</div></div></section>'+forgeOrdersMarkup();
+}
+function forgeOrdersMarkup(){
+  const orders=state.forgeOrders??[];
+  const rows=orders.map((order,index)=>{
+    const running=state.jobs.find(job=>job.forgeOrder===order.id);
+    const recipe=forgeRecipes[order.recipe];
+    const progress=order.mode==='count'?order.done+' / '+order.target+' 已完成'
+      :'在库 '+state.gear[order.recipe]+' ＋ 在制 '+forgeInProgress(state,order.recipe)+' / 目标 '+order.target;
+    const oreDelivery=recipe.cost.starOre>available(state,'starOre')&&state.jobs.find(job=>job.type==='harvest'&&job.arg==='mist5'&&job.starOreHarvest&&job.end!==null);
+    const status=running?esc(state.people[running.people[0]].name)+'炼制中 · '+clock(running.end)+(order.paused?' · 完工后暂停':'')
+      :esc(forgeOrderReason(state,order)||'材料齐，等待炼器弟子')+(oreDelivery&&!order.paused&&orderNeedsWork(state,order)?' · 矿队预计 '+clock(oreDelivery.end)+' 后回山':'');
+    const attrs='data-token="'+order.id+'" data-value="';
+    return '<details data-detail="forge-order-'+order.id+'"><summary><b>'+gearNames[order.recipe]+'</b> · '+progress+' · '+status+'</summary>'
+      +'<p>'+costText(recipe.cost)+'</p><div class="actions"><label>目标数量 <input id="forge-target-'+order.id+'" type="number" min="'+(order.mode==='count'?order.done+1:1)+'" max="999" value="'+order.target+'"></label>'
+      +btn('修改数量','forge-order-edit',attrs+'target"')+btn('上移','forge-order-edit',attrs+'up"',index===0?'已在首位':'')
+      +btn('下移','forge-order-edit',attrs+'down"',index===orders.length-1?'已在末位':'')
+      +btn(order.paused?'恢复':'暂停','forge-order-edit',attrs+'toggle"')+btn('取消剩余订单','forge-order-edit',attrs+'cancel"')+'</div></details>';
+  }).join('');
+  const history=state.forgeHistory??[];
+  return '<section class="task-form forge-orders"><h3>生产单</h3>'+(rows||'<p>暂无生产单。</p>')
+    +(history.length?'<details data-detail="forge-history"><summary>已完成 · '+history.length+'</summary>'+history.map(order=>'<p>'+gearNames[order.recipe]+' · '+order.done+' / '+order.target+'</p>').join('')+'</details>':'')+'</section>';
 }
 function assignmentPanel(){
   const availableTasks=taskChoices();
@@ -2488,7 +2563,7 @@ function actorStatus(p,i){
 }
 function activityStatus(p,i){
   const j=jobFor(state,i);
-  if(j)return (restingForFatigue(state,p)?'本轮后休息 · ':j.leisure?'自主 · ':'')+(own(industries,j.arg)?industryAction(j.type,j.arg):j.type==='repair'?repairs[j.arg][0]:j.type==='forge'?'打造'+gearNames[j.arg]:j.type==='manual'?'学习'+manuals[j.arg].name:tasks[j.type][0])+' · '+(j.end===null?'等待处理':clock(j.end));
+  if(j)return (restingForFatigue(state,p)?'本轮后休息 · ':j.leisure||j.freeWork?'自由 · ':'')+(own(industries,j.arg)?industryAction(j.type,j.arg):j.type==='repair'?repairs[j.arg][0]:j.type==='forge'?'打造'+gearNames[j.arg]:j.type==='manual'?'学习'+manuals[j.arg].name:tasks[j.type][0])+' · '+(j.end===null?'等待处理':clock(j.end))+(j.freeReason?' · '+esc(j.freeReason):'');
   if((state.townVisit?.people??[state.townVisit?.person]).includes(i))return '在石桥镇 · 返回山门后继续排班';
   if(restingForFatigue(state,p))return '疲劳休息 · '+clock(fatigueRecovery(state,p))
     +(p.rest>state.time?' · 受伤休养 '+clock(p.rest):'');
@@ -2497,7 +2572,7 @@ function activityStatus(p,i){
   if(!p.schedulePaused){
     const mode=scheduleMode(state,p),hour=gameHour(state);
     if(mode==='rest')return hour<6||hour>=22?'安睡':'静坐调息';
-    if(mode==='free')return p.rank?'在山门散步':'在庭院活动';
+    if(mode==='free')return '自由 · 暂无可做的工作';
   }
   const reason=scheduleWaitReason(state,i);
   return reason?'待命 · '+esc(reason):'待命';
@@ -2911,6 +2986,17 @@ function render(){
   }
   clocks();drawAll();
 }
+function freeWorkMarkup(p,i){
+  const list=listFreeWork(p);
+  const remaining=freeWorkModes.filter(mode=>canListWork(state,mode)&&!list.includes(mode));
+  return '<details data-detail="free-work-'+i+'"><summary>自由时 · '+(list.length?list.map(mode=>schedules[mode]).join(' → '):'待命')+'</summary>'
+    +list.map((mode,index)=>'<div class="row"><span>'+schedules[mode]+(!canListWork(state,mode)?'（暂不可用）':'')+'</span><div class="actions">'
+      +btn('上移','free-work-edit','data-i="'+i+'" data-n="'+index+'" data-value="up"',index===0?'已在首位':'')
+      +btn('移除','free-work-edit','data-i="'+i+'" data-n="'+index+'" data-value="remove"')+'</div></div>').join('')
+    +(remaining.length?'<div class="actions"><label>工作 <select id="free-work-'+i+'">'
+      +remaining.map(mode=>option(mode,schedules[mode])).join('')+'</select></label>'+btn('加入清单','free-work-edit','data-i="'+i+'" data-value="add"')+'</div>':'')
+    +'</details>';
+}
 function divisionMarkup(){
   return '<h2>弟子分工</h2><div class="division-list">'+state.people.map((p,i)=>{
     const top=Object.keys(trades).sort((a,b)=>tradeCount(p,b)-tradeCount(p,a))[0];
@@ -2918,7 +3004,7 @@ function divisionMarkup(){
     return '<article class="rpg-card"><div class="row"><h3>'+esc(p.name)+'</h3><small>'+rankName(p)+'</small></div>'
       +'<p>职务 · '+(duties[p.duty]?.[0]??'未安排')+(p.dutyPaused?'（暂停）':'')+'</p>'
       +'<p>熟练度 · '+(count?trades[top][0]+' '+tradeRanks[tradeLevel(count)]+'（'+count+'）':'暂无专长')+'</p>'
-      +talentMarkup(p)+'<p>'+actorStatus(p,i)+'</p><div class="actions">'
+      +talentMarkup(p)+'<p>'+actorStatus(p,i)+'</p>'+freeWorkMarkup(p,i)+'<div class="actions">'
       +btn('调整作息','division-person','data-i="'+i+'" data-value="schedule"')
       +btn('调整职务','division-person','data-i="'+i+'" data-value="people"')+'</div></article>';
   }).join('')+'</div>';
@@ -3063,6 +3149,15 @@ function handle(e){
     render();
     $('assignments').querySelector('[data-kind="map-tile"][aria-pressed="true"]')?.focus({preventScroll:true});
     return;
+  }
+  if(kind==='forge-order-add'){
+    sync({kind,recipe:value,mode:b.dataset.mode,target:$('forge-new-quantity').valueAsNumber});return;
+  }
+  if(kind==='forge-order-edit'){
+    sync({kind,token,value,target:$('forge-target-'+token)?.valueAsNumber});return;
+  }
+  if(kind==='free-work-edit'){
+    sync({kind,i,n,value,work:$('free-work-'+i)?.value});return;
   }
   if(kind==='forge-pick'){
     assignment.task=value;render();
