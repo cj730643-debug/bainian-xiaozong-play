@@ -289,6 +289,7 @@ const withName=(line,person)=>line.replaceAll('{name}',()=>person.name);
 const minute = 60_000;
 const scheduleHour = 30_000;
 const scheduledWork={
+  starMining:['碎星采矿','harvest','mist5'],
   timber:['伐木','harvest'],masonry:['采石','harvest'],smith:['炼器','forge'],
   farm:['种药','farm'],heal:['炼丹','heal'],patrol:['巡山','patrol'],
   field:['耕田','harvest','field'],mine:['采矿','harvest','mine']
@@ -311,7 +312,7 @@ const nextSeasonTime=s=>s.time+seasonLength-calendarTime(s)%seasonLength;
 const offlineCap = 240 * minute;
 const attributes = ['根骨','悟性','体魄','身法','神识'];
 const seasons = ['春','夏','秋','冬'];
-const resources = {food:'口粮',herbs:'普通药材',stone:'灵石',main:'筑基主药',aux:'筑基辅药',pill:'筑基丹',heal:'疗伤丹',qi:'聚气丹',wood:'木材',masonry:'石料'};
+const resources = {food:'口粮',herbs:'普通药材',stone:'灵石',main:'筑基主药',aux:'筑基辅药',pill:'筑基丹',heal:'疗伤丹',qi:'聚气丹',wood:'木材',masonry:'石料',starOre:'碎星矿石'};
 const arts = {guard:'护身诀',stone:'飞石术',vine:'缠藤术',stream:'引流护行',pierce:'破甲剑',recover:'回息术',burn:'燃火术'};
 const elements=['金','木','水','火','土'];
 const manuals={
@@ -351,6 +352,8 @@ function learnManual(p,name,art){
   if(art&&!p.known.includes(art))p.known.push(art);
 };
 const forgeRecipes={
+  starSword:{duration:3,cost:{starOre:5,wood:2},effect:'武器基础物攻 18'},
+  starArmor:{duration:4,cost:{starOre:6,wood:2},effect:'物防 +5'},
   bow:{duration:2,cost:{wood:4,masonry:1},effect:'基础物攻 10 · 射程 3 格'},
   iron:{duration:3,cost:{wood:2,masonry:2,stone:2},effect:'武器基础物攻 15'},
   heart:{duration:2,cost:{wood:2,masonry:1,stone:1},effect:'每场首次受击减伤 30%'},
@@ -369,7 +372,7 @@ const discoveries={
   mist2:{name:'白崖石涧',mark:'石',build:'铺设石径',gather:'采集石料',item:'masonry',base:5,bonus:2,materials:{wood:3}},
   mist3:{name:'暮露药谷',mark:'药',build:'开辟药径',gather:'采摘药草',item:'herbs',base:5,bonus:3,materials:{wood:3,masonry:2}},
   mist4:{name:'野栗坡',mark:'粮',build:'修建储粮棚',gather:'采集野栗',item:'food',base:7,bonus:3,materials:{wood:4}},
-  mist5:{name:'碎星矿脉',mark:'矿',build:'支护矿脉',gather:'开采灵石',item:'stone',base:2,bonus:1,materials:{wood:4,masonry:4}}
+  mist5:{name:'碎星矿脉',mark:'矿',build:'支护矿脉',gather:'开采碎星矿石',item:'starOre',base:2,bonus:1,materials:{wood:4,masonry:4}}
 };
 const industries={
   ...discoveries,
@@ -400,18 +403,20 @@ const tasks = {
   trade:['石桥镇换粮',2],winter:['围炉讲法',1]
 };
 const travel = new Set([...Object.keys(townJobs),'survey','develop','harvest','hill','seek','patrol','rain','ape','trail','outer','town','temple','canal','recruit','trade','visitTown']);
-const groupTravel = new Set([...Object.keys(townJobs),'survey','harvest','hill','seek','patrol','rain','ape','temple','canal','outer']);
-const materialDuties={timber:['wood','forest','mist1'],masonry:['masonry','quarry','mist2']};
-const stockGoal=(s,id)=>s.workGoals?.[id]??(['wood','masonry'].includes(id)?12:0);
+const groupTravel = new Set(['visitTown',...Object.keys(townJobs),'survey','harvest','hill','seek','patrol','rain','ape','temple','canal','outer']);
+const materialDuties={timber:['wood','forest','mist1'],masonry:['masonry','quarry','mist2'],starMining:['starOre','mist5']};
+const stockGoal=(s,id)=>s.workGoals?.[id]??(id==='starOre'?8:['wood','masonry'].includes(id)?12:0);
 const siteExplored=(s,id)=>Boolean(s.flags[(own(discoveries,id)?'explored_':'survey_')+id]);
 const materialSite=(p,mode)=>p.worksites?.[mode]??materialDuties[mode][1];
 function plannedMaterial(s,id){
   return s.jobs.reduce((total,j)=>{
     const site=industries[j.arg];
+    if(id==='starOre'&&j.arg==='mist5'&&!j.starOreHarvest)return total;
     return total+(j.type==='harvest'&&site?.item===id?site.base+(s.flags['industry_'+j.arg]?site.bonus:0)+tradeLevel(tradeCount(s.people[j.people[0]],tradeFor(j.type,j.arg))):0);
   },s.stock[id]);
 }
 const duties={
+  starMining:['碎星采矿','harvest','按碎星矿石库存目标采集'],
   timber:['伐木管事','harvest','按木材库存目标采集'],
   masonry:['采石管事','harvest','按石料库存目标采集'],
   smith:['炼器执事','forge','按工坊生产单打造'],
@@ -421,10 +426,63 @@ const duties={
   heal:['丹房执事','heal','按丹房库存目标补丹'],
   patrol:['巡山队长','patrol','空闲时巡山，每趟消耗 2 口粮']
 };
+const itemValues={food:0.125,herbs:0.25,stone:1,main:3,aux:3,pill:8,heal:0.75,qi:1,wood:0.2,masonry:0.25,starOre:0.5,
+  woodSword:0.5,bow:2,iron:4,heart:3,jade:4,starSword:5,starArmor:6};
+const itemWeights={food:5,herbs:2,stone:1,main:2,aux:2,pill:1,heal:1,qi:1,wood:20,masonry:30,starOre:15,
+  woodSword:10,bow:20,iron:30,heart:1,jade:1,starSword:40,starArmor:50};
+const commodityName=id=>resources[id]??(id==='woodSword'?'青云木剑':gearNames[id]);
+const archiveValue=label=>label.includes('契')?3:/引泉|残卷/.test(label)?8:/《/.test(label)?4:1;
+const carryingLimit=p=>(6+p.stats[2])*(p.rank?15:10);
+function caravanLoad(s,ids,cargo){
+  const goods=Object.entries(cargo).sort(([a],[b])=>itemWeights[b]-itemWeights[a]);
+  if(goods.some(([id,n])=>!Number.isSafeInteger(n)||n<0||!own(itemWeights,id)))return {reason:'货物数量无效。'};
+  const bags=ids.map(i=>({i,left:carryingLimit(s.people[i]),items:{}}));
+  const limit=bags.reduce((n,b)=>n+b.left,0);
+  const weight=goods.reduce((n,[id,count])=>n+count*itemWeights[id],0);
+  if(weight>limit)return {reason:'队伍载重不足（'+weight/10+' / '+limit/10+' 斤）。'};
+  const failed=new Set();
+  function distribute(kind,remaining,position,order){
+    if(kind===goods.length)return true;
+    const [id,count]=goods[kind],size=itemWeights[id];
+    if(remaining===undefined){
+      if(!count)return distribute(kind+1);
+      order=[...bags].sort((a,b)=>b.left-a.left);position=0;remaining=count;
+    }
+    if(remaining===0)return distribute(kind+1);
+    const candidates=order.slice(position);
+    if(candidates.reduce((n,bag)=>n+Math.floor(bag.left/size),0)<remaining)return false;
+    const key=kind+'|'+remaining+'|'+candidates.map(b=>b.left).join(',')+'|'+order.slice(0,position).map(b=>b.left).join(',');
+    if(failed.has(key))return false;
+    const bag=order[position];
+    for(let n=Math.min(remaining,Math.floor(bag.left/size));n>=0;n--){
+      if(n){bag.left-=n*size;bag.items[id]=n;}
+      if(distribute(kind,remaining-n,position+1,order))return true;
+      if(n){bag.left+=n*size;delete bag.items[id];}
+    }
+    failed.add(key);return false;
+  }
+  if(!distribute(0))return {reason:'货物无法分装到各人行囊，请调整数量或增加运力。'};
+  return {bags,weight,limit};
+}
 const marketOffers={
-  herbs:{label:'出售药材',cost:{herbs:5},reward:{stone:1}},
-  heal:{label:'出售疗伤丹',cost:{heal:2},reward:{stone:1}},
-  food:{label:'买入口粮',cost:{stone:1},reward:{food:6}},
+  ore:{label:'出售碎星矿石',cost:{starOre:4},reward:{stone:2},quota:3},
+  oreBuy:{label:'买入碎星矿石',cost:{stone:3},reward:{starOre:4},quota:1},
+  grainSale:{label:'出售口粮',cost:{food:10},reward:{stone:1},quota:1},
+  woodSale:{label:'出售木材',cost:{wood:10},reward:{stone:1},quota:1},
+  woodBuy:{label:'买入木材',cost:{stone:3},reward:{wood:10},quota:1},
+  stoneSale:{label:'出售石料',cost:{masonry:20},reward:{stone:3},quota:1},
+  stoneBuy:{label:'买入石料',cost:{stone:7},reward:{masonry:20},quota:1},
+  herbsBuy:{label:'买入药材',cost:{stone:7},reward:{herbs:20},quota:1},
+  healBuy:{label:'买入疗伤丹',cost:{stone:1},reward:{heal:1},quota:2},
+  qiSale:{label:'出售聚气丹',cost:{qi:2},reward:{stone:1},quota:1},
+  qiBuy:{label:'买入聚气丹',cost:{stone:3},reward:{qi:2},quota:1},
+  ...Object.fromEntries(Object.entries({bow:[1,3],iron:[2,5],heart:[1,4],jade:[2,5],starSword:[2,0],starArmor:[3,0]}).flatMap(([id,[sale,buy]])=>[
+    [id+'Sale',{gear:id,cost:{[id]:1},reward:{stone:sale},quota:1}],
+    ...(buy?[[id+'Buy',{gear:id,buy:true,cost:{stone:buy},reward:{[id]:1},quota:1}]]:[])
+  ])),
+  herbs:{label:'出售药材',cost:{herbs:5},reward:{stone:1},quota:4},
+  heal:{label:'出售疗伤丹',cost:{heal:2},reward:{stone:1},quota:2},
+  food:{label:'买入口粮',cost:{stone:1},reward:{food:6},quota:6},
   order:{label:'镇民供药订单',cost:{herbs:10},reward:{stone:3},claim:'marketOrder',repGain:1},
   springSupplies:{label:'春耕备粮',cost:{stone:2},reward:{food:16},claim:'springSupplies',season:0},
   summerHerbs:{label:'夏集药摊',cost:{stone:2},reward:{herbs:8},claim:'summerHerbs',season:1},
@@ -444,10 +502,10 @@ const he = () => makePerson('阿禾','木灵根',[4,5,4,6,5,5],15,19);
 const man = () => makePerson('陆小满','土灵根',[4,4,7,6,4,3]);
 function fresh(wall){
   return {version:2,revision:0,wall,time:0,created:false,people:[shen(),he()],leader:null,
-    stock:{wood:0,masonry:0,food:12,herbs:3,stone:0,main:0,aux:0,pill:0,heal:0,qi:0},reserve:{},
+    stock:{wood:0,masonry:0,starOre:0,food:12,herbs:3,stone:0,main:0,aux:0,pill:0,heal:0,qi:0},reserve:{},
     jobs:[],serial:0,eventQueue:[],seenEvents:[],journal:[],archive:[starterManual,'借泉契',...Object.values(manuals).map(m=>m.name)],
     farmRounds:0,studyRounds:0,flags:{},built:{},route:'',uses:0,ditch:0,
-    gear:{bow:0,iron:0,heart:0,jade:0},seasonClaims:{},legacy:false};
+    gear:{bow:0,iron:0,heart:0,jade:0,starSword:0,starArmor:0},seasonClaims:{},legacy:false};
 }
 function log(s,line){s.journal.unshift(line);s.journal.length=Math.min(s.journal.length,40);}
 function queue(s,id,people,job=null,repeat=false){
@@ -581,7 +639,7 @@ function settleSupply(s){
   if(!contract?.remaining)return;
   const delivered=spend(s,supplyTerms.cost);
   if(delivered){
-    s.stock.stone+=supplyTerms.stones;
+    s.stock.stone+=supplyTerms.stones;industryLedger(s,'contractStone',supplyTerms.stones);
     s.flags.stonebridgeRep=townRep(s)+supplyTerms.reputation;
     contract.delivered++;
   }
@@ -652,6 +710,7 @@ function beginWeek(s){
     ranks:s.people.map(rankName),breakthroughs:[],blocked:{}};
   return s.weekly.current;
 }
+function industryLedger(s,key,amount){const week=beginWeek(s);week[key]=(week[key]??0)+amount;}
 function trackWeekRanks(s){
   const week=beginWeek(s);
   s.people.forEach((p,i)=>{
@@ -687,7 +746,7 @@ function advanceClock(s,time){
   s.stock.food-=paid;
   s.lastFoodBill={paid,due};
   const {week,food,breakthroughs,blocked}=s.weekly.current;
-  s.weekly.reports.unshift({week,foodDelta:s.stock.food-food,breakthroughs,blocked});
+  s.weekly.reports.unshift({...s.weekly.current,week,foodDelta:s.stock.food-food,breakthroughs,blocked,oreEnd:s.stock.starOre??0});
   s.weekly.reports.length=Math.min(4,s.weekly.reports.length);
   s.weekly.current=null;
   beginWeek(s);
@@ -770,8 +829,9 @@ function jobSpec(s,type,ids,arg='',pack=0){
   const members=ids.map(i=>s.people[i]), leader=ids[0], p=members[0];
   const fail=reason=>({reason});
   if(!s.created||!own(tasks,type)||!p||new Set(ids).size!==ids.length||members.some(x=>!x))return fail('请选择有效人选。');
+  if(own(townJobs,type)&&s.townVisit?.cargo&&(s.townVisit.people.length>1||Object.entries(s.townVisit.cargo).some(([id,n])=>n>(id==='food'?2:0))))return fail('请先运回商货，外出委托由空货单的单名弟子接取。');
   if(isTownTask(type)&&(ids.length!==1||s.townVisit?.person!==leader))return fail('由当前抵达石桥镇的弟子执行。');
-  if(!isTownTask(type)&&ids.includes(s.townVisit?.person))return fail('在石桥镇的弟子需先返回山门。');
+  if(!isTownTask(type)&&type!=='returnRoad'&&ids.some(i=>(s.townVisit?.people??[s.townVisit?.person]).includes(i)))return fail('在石桥镇的弟子需先返回山门。');
   if(ids.length>1&&!groupTravel.has(type)&&!['teach','winter','transmit','apprentice','watch'].includes(type))return fail('这项差事只需一人。');
   if(['teach','winter','transmit','apprentice'].includes(type)&&ids.length!==2)return fail('请选择授课者和后辈。');
   const tired=ids.find(i=>restingForFatigue(s,s.people[i]));
@@ -824,7 +884,7 @@ function jobSpec(s,type,ids,arg='',pack=0){
       if(arg==='quarry'&&s.flags.quarryRocks&&type!=='survey')return fail('先清理山道落石。');
       if(!own(industries,arg))return fail('请选择有效的产业地点。');
       const site=industries[arg], surveyed=(own(discoveries,arg)?s.flags['explored_'+arg]:s.flags['survey_'+arg]), built=s.flags['industry_'+arg];
-      if(s.jobs.some(j=>j.arg===arg&&['survey','develop','harvest'].includes(j.type)))return fail('已有队伍在此作业。');
+      if(s.jobs.some(j=>j.arg===arg&&['survey','develop','harvest'].includes(j.type)))return fail(arg==='mist5'?'碎星矿脉采掘位已满。':'已有队伍在此作业。');
       if(type==='survey'){
         if(own(discoveries,arg)||surveyed)return fail('此处已勘查或需从地图探索。');
         label=site.survey;
@@ -833,7 +893,10 @@ function jobSpec(s,type,ids,arg='',pack=0){
         if(type==='develop'){
           if(built)return fail('此处已整修。');
           label=site.build;Object.assign(cost,site.materials??{stone:site.cost});
-        }else label=site.gather;
+        }else{
+          label=site.gather;
+          if(arg==='mist5'&&caravanLoad(s,ids,{starOre:site.base+(built?site.bonus:0)+tradeLevel(tradeCount(p,'mining'))}).reason)return fail('队伍负重不足，无法带回预计矿产。');
+        }
       }
       break;
     }
@@ -893,7 +956,7 @@ function jobSpec(s,type,ids,arg='',pack=0){
       label=name;duration=minutes;cost=materials;break;
     }
     case 'visitTown':
-      if(current('visitTown'))return fail('已有弟子在路上。');
+      if(current('visitTown')||s.jobs.some(j=>j.type==='returnRoad'&&j.returnCargo))return fail('已有石桥商队在路上。');
       if(s.townVisit)return fail('已有弟子抵达石桥镇。');
       break;
     case 'recruit': {
@@ -904,11 +967,7 @@ function jobSpec(s,type,ids,arg='',pack=0){
       if(s.annualRecruit?.year===year(s)&&s.annualRecruit.listed)return fail('今年的名册已带回。');
       break;
     }
-    case 'trade': {
-      const autumn=season(s)===2&&s.seasonClaims.autumn!==year(s);
-      if(current('trade'))return fail('已有一人前往石桥镇交易。');
-      cost={herbs:2};arg=autumn?'autumn':'plain';break;
-    }
+    case 'trade':return fail('请用随行货物在石桥坊市交易。');
     case 'winter':
       if(season(s)!==3||s.seasonClaims.winter===year(s))return fail('围炉讲法每年冬季限一次。');
       if(!Object.values(mainManuals(p)).some(name=>p.mastery[name]>=3))return fail('授课者的当前功法需达到熟练。');
@@ -936,13 +995,18 @@ function start(s,type,ids,arg='',pack=0,repeat=false,policy){
   if(spec.reason)return spec.reason;
   s.jobs=s.jobs.filter(j=>!j.leisure||!j.people.some(i=>ids.includes(i)));
   spend(s,spec.cost,spec.useReserve);
+  if(type==='forge'){industryLedger(s,'oreForged',spec.cost.starOre??0);industryLedger(s,'forgeStone',spec.cost.stone??0);}
+  if(['repair','develop','fortify'].includes(type))industryLedger(s,'buildStone',spec.cost.stone??0);
   const departingTown=s.townVisit?.person;
+  const townRations=own(townJobs,type)&&ids.includes(departingTown)?s.townVisit.cargo?.food??0:0;
+  if(townRations)s.stock.food+=townRations;
   if(ids.includes(departingTown)&&!townLocalTasks.has(type))delete s.townVisit;
   if(type==='trade'&&spec.arg==='autumn')s.seasonClaims.autumn=year(s);
   if(type==='winter')s.seasonClaims.winter=year(s);
   s.jobs.push({id:++s.serial,type,people:ids,started:s.time,townOrigin:ids.includes(departingTown)?departingTown:null,qiBonus:takeQi(s,s.people[ids[0]],type),arg:spec.arg,pack,route:spec.route,end:s.time+(spec.route?.total??spec.duration*minute),
     repeat:repeat&&['meditate','farm'].includes(type)});
   const job=s.jobs.at(-1);
+  if(type==='harvest'&&arg==='mist5')job.starOreHarvest=true;
   if(policy)job.battlePolicy={scan:!!policy.scan,auto:!!policy.auto,retreat:!!policy.retreat,roles:Object.fromEntries(ids.filter(i=>['front','rear'].includes(policy.roles?.[i])).map(i=>[i,policy.roles[i]]))};
   if(ambushRoutes.has(type)&&spec.route?.go>0&&Math.random()<0.2){
     job.ambushAt=s.time+Math.max(1,Math.floor(spec.route.go/2));
@@ -950,14 +1014,18 @@ function start(s,type,ids,arg='',pack=0,repeat=false,policy){
   }
   log(s,ids.map(i=>s.people[i].name).join('、')+'开始'+spec.label+'。');
 }
+function creditCargo(s,cargo){
+  for(const [id,n] of Object.entries(cargo??{}))(own(resources,id)?s.stock:s.gear)[id]+=n;
+}
 function finishJob(s,j){
   s.jobs=s.jobs.filter(a=>a.id!==j.id);
   s.stock.heal+=j.pack||0;
-  if(j.end===null&&j.route?.back)beginReturn(s,j.people,j.route);
+  if(j.end===null&&j.route?.back)beginReturn(s,j.people,j.route,j.returnCargo);
+  else creditCargo(s,j.returnCargo);
 }
 function rewardTownJob(s,type){
   const offer=townJobs[type];
-  s.stock.stone+=offer.stone;
+  s.stock.stone+=offer.stone;industryLedger(s,'contractStone',offer.stone);
   s.flags.stonebridgeRep=townRep(s)+offer.gain;
   s.seasonClaims[type]=year(s);
   log(s,'石桥镇 · '+offer.label+'，获得 '+offer.stone+' 灵石、'+offer.gain+' 声望。');
@@ -994,7 +1062,7 @@ function complete(s,j){
       break;
     }
     case 'escort':case 'caravan':rewardTownJob(s,j.type);break;
-    case 'explore':mark(s,'explored_'+j.arg);log(s,'发现'+discoveries[j.arg].name+'，现可派人采集。');break;
+    case 'explore':if(j.arg==='mist5'&&!s.flags.explored_mist5){s.stock.starOre+=2;industryLedger(s,'oreIn',2);}mark(s,'explored_'+j.arg);log(s,'发现'+discoveries[j.arg].name+'，现可派人采集。');break;
     case 'clearRocks':s.flags.quarryRocks=false;s.stock.masonry+=2;break;
     case 'survey':
       mark(s,'survey_'+j.arg);
@@ -1004,8 +1072,11 @@ function complete(s,j){
     case 'harvest':{
       const site=industries[j.arg];
       const amount=site.base+(s.flags['industry_'+j.arg]?site.bonus:0)+(['mining','logging','quarrying'].includes(trade)?proficiency:0);
-      s.stock[site.item]+=amount;
-      log(s,'从'+site.name+'带回 '+amount+' '+resources[site.item]+'。');
+      const item=j.arg==='mist5'&&!j.starOreHarvest?'stone':site.item;
+      s.stock[item]+=amount;
+      if(item==='starOre')industryLedger(s,'oreIn',amount);
+      if(item==='stone')industryLedger(s,'mineStone',amount);
+      log(s,'从'+site.name+'带回 '+amount+' '+resources[item]+'。');
       break;
     }
     case 'meditate': {
@@ -1054,7 +1125,7 @@ function complete(s,j){
     case 'canal':s.stock.herbs+=4;break;
     case 'forge':s.gear[j.arg]++;break;
     case 'repair':s.built[j.arg]=j.arg==='farm'?true:(Number(s.built[j.arg])||0)+1;break;
-    case 'visitTown':s.townVisit={id:j.id,person:j.people[0]};break;
+    case 'visitTown':s.townVisit={id:j.id,person:j.people[0],people:j.people,cargo:j.cargo};break;
     case 'recruit':{
       const plan=annualRecruit(s);
       if(plan){plan.listed=true;plan.pendingEvent=true;log(s,p.name+'带回了第 '+plan.year+' 年的招徒名册。');}
@@ -1098,12 +1169,13 @@ function scheduledIndustryReason(s,industry){
 function scheduleWaitReason(s,i){
   const p=s.people[i],mode=scheduleMode(s,p),workMode=mode==='duty'?p.duty:mode;
   if(p.schedulePaused)return '自动安排已暂停';
-  if(s.townVisit?.person===i)return '在石桥镇，返回山门后继续排班';
+  if((s.townVisit?.people??[s.townVisit?.person]).includes(i))return '在石桥镇，返回山门后继续排班';
   if(p.dutyPaused&&(mode==='duty'||workMode===p.duty&&own(materialDuties,workMode)))return '职务已暂停';
   if(own(materialDuties,workMode)){
     const [id]=materialDuties[workMode];
     if(plannedMaterial(s,id)>=stockGoal(s,id))return resources[id]+'库存目标已足';
-    return jobSpec(s,'harvest',[i],materialSite(p,workMode)).reason;
+    const site=materialSite(p,workMode);
+    return (workMode==='starMining'?scheduledIndustryReason(s,site):'')||jobSpec(s,'harvest',[i],site).reason;
   }
   if(workMode==='smith'){
     if(!s.built.workshop)return '炼器工坊尚未建成';
@@ -1128,7 +1200,7 @@ function assignDuties(s){
   const order=s.people.map((p,i)=>({p,i,leisure:scheduleMode(s,p)==='free'}));
   order.sort((a,b)=>Number(a.leisure)-Number(b.leisure));
   order.forEach(({p,i})=>{
-    if(!free(s,i)||jobFor(s,i)||p.schedulePaused||s.townVisit?.person===i)return;
+    if(!free(s,i)||jobFor(s,i)||p.schedulePaused||(s.townVisit?.people??[s.townVisit?.person]).includes(i))return;
     const mode=scheduleMode(s,p);
     const duty=mode==='duty'&&!p.dutyPaused&&own(duties,p.duty)?duties[p.duty]:null;
     const alchemy=mode==='heal'||duty?.[1]==='heal';
@@ -1163,7 +1235,10 @@ function assignDuties(s){
       }else{
         task='harvest';
         const [resource]=materialDuties[workMode];
-        if(plannedMaterial(s,resource)<stockGoal(s,resource))arg=materialSite(p,workMode);
+        if(plannedMaterial(s,resource)<stockGoal(s,resource)){
+          const site=materialSite(p,workMode);
+          if(workMode!=='starMining'||!scheduledIndustryReason(s,site))arg=site;
+        }
       }
       if(arg&&!start(s,task,[i],arg)){jobFor(s,i).duty=true;changed=true;}
       return;
@@ -1360,8 +1435,8 @@ function combatStats(p){
     attackRange:p.weapon==='bow'?3:1,
     speed:Number((speed*(mastered(p,manuals.cloudstep.name,6)?1.6:mastered(p,manuals.cloudstep.name)?1.3:1)*talentFactor(p,'swift')).toFixed(2)),hp,maxHp:hp,
     mp:Math.round((10+2*spirit)*(p.rank?1.5:1)*(water?1.1:stream?1.2:1)*(p.charm==='jade'?1.3:1)),
-    physicalAttack:Math.round(((p.weapon==='iron'?15:p.weapon==='bow'?10:12)+body*0.5)*realm*(mastered(p,manuals.metal.name)?1.15:1)),
-    physicalDefense:Math.round(body*realm*(earth?1.35:1)*talentFactor(p,'sturdy','frail')),
+    physicalAttack:Math.round(((p.weapon==='starSword'?18:p.weapon==='iron'?15:p.weapon==='bow'?10:12)+body*0.5)*realm*(mastered(p,manuals.metal.name)?1.15:1)),
+    physicalDefense:Math.round(body*realm*(earth?1.35:1)*talentFactor(p,'sturdy','frail'))+(p.charm==='starArmor'?5:0),
     spellAttack:Math.round((10+spirit*0.5)*realm*(mastered(p,manuals.fire.name)?1.2:1)),
     spellDefense:Math.round(spirit*realm*(water?1.25:stream?1.3:1)*talentFactor(p,'clear'))
   };
@@ -1584,7 +1659,7 @@ function dispatch(s,a){
       return;
     }
     case 'work-goal':
-      if(s.created&&Number.isSafeInteger(a.n)&&a.n>=0&&(['wood','masonry'].includes(a.value)||own(forgeRecipes,a.value))){
+      if(s.created&&Number.isSafeInteger(a.n)&&a.n>=0&&(['wood','masonry','starOre'].includes(a.value)||own(forgeRecipes,a.value))){
         s.workGoals??={};s.workGoals[a.value]=a.n;return;
       }
       return '请输入非负整数。';
@@ -1602,12 +1677,35 @@ function dispatch(s,a){
       if(!p?.duty)break;
       p.dutyPaused=false;return;
     }
+    case 'depart-market':{
+      const ids=a.ids??[], goods=a.cargo??{};
+      const spec=jobSpec(s,'visitTown',ids);
+      if(spec.reason)return spec.reason;
+      const cargo={food:4*ids.length};
+      for(const [id,n] of Object.entries(goods)){
+        if(!own(itemWeights,id)||!Number.isSafeInteger(n)||n<0||(!own(resources,id)&&!own(s.gear,id)))return '货单有无效物品。';
+        if(n)cargo[id]=(cargo[id]??0)+n;
+      }
+      for(const [id,n] of Object.entries(cargo)){
+        if((own(resources,id)?available(s,id):s.gear[id])<n)return commodityName(id)+'库存不足。';
+      }
+      const load=caravanLoad(s,ids,cargo);
+      if(load.reason)return load.reason;
+      const result=start(s,'visitTown',ids);
+      if(result)return result;
+      cargo.food-=2*ids.length;
+      for(const [id,n] of Object.entries(cargo))(own(resources,id)?s.stock:s.gear)[id]-=n;
+      s.jobs.at(-1).cargo=cargo;s.lastTradePack={ids:[...ids],goods:{...goods}};
+      return;
+    }
     case 'leave-town':{
       if(!s.townVisit)return '无人留在石桥镇。';
       if(jobFor(s,s.townVisit.person))return '请等镇内差事结束再返回。';
-      const ids=[s.townVisit.person];
+      const ids=s.townVisit.people??[s.townVisit.person];
+      const cargo=s.townVisit.cargo;
+      if(cargo)cargo.food-=2*ids.length;
       const route=travelPlan(s,'returnRoad',ids,'',0);
-      delete s.townVisit;beginReturn(s,ids,route);return;
+      delete s.townVisit;beginReturn(s,ids,route,cargo);return;
     }
     case 'defer-recruit':
       if(s.annualRecruit?.year===year(s))s.annualRecruit.pendingEvent=false;
@@ -1638,14 +1736,22 @@ function dispatch(s,a){
     case 'market':{
       if(!s.created||!own(marketOffers,a.value))break;
       const offer=marketOffers[a.value];
-      const reason=marketReason(s,offer);
+      const reason=marketReason(s,offer,a.value);
       if(reason)return reason;
-      const {label,cost,reward}=offer;
-      spend(s,cost);
-      for(const [item,amount] of Object.entries(reward))s.stock[item]+=amount;
+      const {cost,reward}=offer;
+      const label=offerLabel(offer);
+      const cargo=s.townVisit.cargo;
+      for(const [id,n] of Object.entries(cost))cargo[id]-=n;
+      for(const [id,n] of Object.entries(reward))cargo[id]=(cargo[id]??0)+n;
+      s.marketUsage??={};
+      const stamp=marketSeason(s);
+      if(s.marketUsage.stamp!==stamp)s.marketUsage={stamp,used:{}};
+      s.marketUsage.used[a.value]=(s.marketUsage.used[a.value]??0)+1;
+      industryLedger(s,'oreSold',cost.starOre??0);
+      industryLedger(s,'marketStone',(reward.stone??0)-(cost.stone??0));
       if(offer.claim)s.seasonClaims[offer.claim]=year(s);
       if(offer.repGain)s.flags.stonebridgeRep=townRep(s)+offer.repGain;
-      log(s,'石桥坊市 · '+label+'，获得 '+costText(reward)+'。');
+      log(s,'石桥坊市 · '+label+'，获得 '+cargoText(reward)+'。');
       return;
     }
     case 'yield':{
@@ -1670,15 +1776,15 @@ function dispatch(s,a){
       if(s.created&&Number.isSafeInteger(a.n)&&a.n>=0){s.foodFloor=a.n;return;}
       return '口粮保底须为非负整数。';
     case 'reserve':
-      if(['herbs','main','aux','pill'].includes(a.value)&&Number.isInteger(a.n)&&a.n>=0&&a.n<=s.stock[a.value]){s.reserve[a.value]=a.n;return;}
+      if(['herbs','main','aux','pill','starOre'].includes(a.value)&&Number.isInteger(a.n)&&a.n>=0&&a.n<=s.stock[a.value]){s.reserve[a.value]=a.n;return;}
       break;
     case 'root':
       if(p&&a.i===s.leader&&!p.gift&&elements.includes(a.value)){p.gift=a.value+'灵根';return;}
       break;
     case 'technique':if(p&&free(s,a.i)&&own(p.mastery,a.value)){setMainManual(p,a.value);return;}break;
     case 'gear':{
-      if(!p||!free(s,a.i)||!['weapon','charm'].includes(a.slot))break;
-      const choices=a.slot==='weapon'?['wood','iron','bow']:['','heart','jade'];
+      if(!p||!free(s,a.i)||(s.townVisit?.people??[s.townVisit?.person]).includes(a.i)||!['weapon','charm'].includes(a.slot))break;
+      const choices=a.slot==='weapon'?['wood','iron','bow','starSword']:['','heart','jade','starArmor'];
       const old=p[a.slot];
       if(!choices.includes(a.value)||old===a.value||own(s.gear,a.value)&&s.gear[a.value]<1)break;
       if(own(s.gear,old))s.gear[old]++;
@@ -1704,9 +1810,11 @@ const btn=(text,kind,attrs='',reason='')=>'<button type="button" data-kind="'+ki
   +(reason?' disabled title="'+esc(reason)+'"':'')+'>'+esc(text)+'</button>';
 const option=(value,label,selected=false)=>'<option value="'+esc(value)+'" '+(selected?'selected':'')+'>'+esc(label)+'</option>';
 const clock=end=>'<span data-clock="'+end+'"></span>';
-const gearNames={bow:'青竹弓',wood:'青云木剑',iron:'旧铁剑',heart:'护心符',jade:'引灵佩','':'无'};
+const gearNames={starSword:'碎星剑',starArmor:'碎星护甲',bow:'青竹弓',wood:'青云木剑',iron:'旧铁剑',heart:'护心符',jade:'引灵佩','':'无'};
 let state=fresh(Date.now()), popup=null, overlay=null, busy=false, lastSignature='', temporary=false, channel=null;
 let draft={stats:[3,3,3,3,3]};
+let marketCargo={};
+const marketParty=()=>assignment.leader===''?[]:[Number(assignment.leader),...assignment.partner];
 let assignment={task:'meditate',leader:'',partner:[],pack:0,repeat:false};
 let formation={}, eventActors={};
 let activeView='overview';
@@ -1760,6 +1868,9 @@ function apply(current,command,wall){
   next.stock.qi??=0;
   next.stock.wood??=0;
   next.stock.masonry??=0;
+  next.stock.starOre??=0;
+  next.gear.starSword??=0;
+  next.gear.starArmor??=0;
   for(const manual of Object.values(manuals))if(!next.archive.includes(manual.name))next.archive.push(manual.name);
   let changed=tick(next,wall);
   const message=command&&command.generation!==(next.generation??0)?'存档已重开，请重新操作。':command?dispatch(next,command):'';
@@ -1904,10 +2015,11 @@ function travelPlan(s,type,ids,arg,work){
   const workTime=type==='visitTown'?0:work;
   return {outward,home,go,back,work:workTime,total:go+workTime+(waiting?0:back),slowest};
 }
-function beginReturn(s,ids,route){
+function beginReturn(s,ids,route,cargo){
   const path=route.back?route.home:route.outward;
   const time=route.back||route.go;
-  if(time)s.jobs.push({id:++s.serial,type:'returnRoad',people:ids,started:s.time,end:s.time+time,
+  if(!time){creditCargo(s,cargo);return;}
+  s.jobs.push({id:++s.serial,type:'returnRoad',people:ids,started:s.time,end:s.time+time,returnCargo:cargo,
     route:{outward:path,home:[],go:time,work:0,back:0}});
 }
 function routeText(s,route,total){
@@ -1936,7 +2048,7 @@ function avatarPosition(s,i,time){
   const place=job&&(own(industries,job.arg)?job.arg:mapActivityPlaces[job.type]);
   const target=Number(Object.keys(mapTiles).find(tile=>mapTiles[tile]===place));
   const origin=job?.townOrigin===i?16:3;
-  const path=mapPath(origin,Number.isFinite(target)?target:s.townVisit?.person===i?16:3);
+  const path=mapPath(origin,Number.isFinite(target)?target:(s.townVisit?.people??[s.townVisit?.person]).includes(i)?16:3);
   const stationary=(tile)=>({x:tile%7,y:Math.floor(tile/7),moving:false});
   if(!job&&!s.townVisit)return stationary(3);
   if(!job||job.end===null||!Number.isFinite(job.started)||path.length===1)return stationary(path.at(-1));
@@ -2007,6 +2119,7 @@ function taskChoices(){
     }
     if(id==='fortify')return !f.gateFortified;
     if(id==='trail')return f.trailOpen&&!f.trail;
+    if(id==='trade')return false;
     if(id==='town'||id==='temple')return !f[id];
     if(id==='restore')return s.route==='borrow'&&!f.restored;
     if(id==='seal')return s.route==='water'&&!f.sealed;
@@ -2045,13 +2158,28 @@ function townServiceReason(s){
   if(i===undefined)return '请先派弟子抵达石桥镇。';
   return jobFor(s,i)?'在镇弟子正在办事。':'';
 }
-function marketReason(s,offer){
+const marketSeason=s=>Math.floor(calendarTime(s)/seasonLength);
+const cargoText=cargo=>Object.entries(cargo??{}).filter(([,n])=>n>0).map(([id,n])=>n+' '+commodityName(id)).join('、');
+const offerLabel=offer=>offer.label??((offer.buy?'买入':'出售')+commodityName(offer.gear));
+function marketRemaining(s,id,offer){return offer.quota===undefined?null:Math.max(0,offer.quota-(s.marketUsage?.stamp===marketSeason(s)?s.marketUsage.used[id]??0:0));}
+function marketReason(s,offer,id){
   const access=townServiceReason(s);
   if(access)return access;
   if(offer.season!==undefined&&season(s)!==offer.season)return '仅在'+seasons[offer.season]+'季开放';
   if(offer.rep&&townRep(s)<offer.rep)return '需要石桥镇声望 '+offer.rep;
   if(offer.claim&&s.seasonClaims[offer.claim]===year(s))return '本年已完成';
-  return missing(s,offer.cost);
+  const cargo=s.townVisit.cargo;
+  if(!cargo)return '请返回山门后重新装货。';
+  const remaining=marketRemaining(s,id,offer);
+  if(remaining===0)return own(offer.cost,'stone')?'暂时缺货':'本季收满';
+  const next={...cargo};
+  const reserveFood=2*s.townVisit.people.length;
+  for(const [item,n] of Object.entries(offer.cost)){
+    if((next[item]??0)-(item==='food'?reserveFood:0)<n)return '随行'+commodityName(item)+'不足。';
+    next[item]-=n;
+  }
+  for(const [item,n] of Object.entries(offer.reward))next[item]=(next[item]??0)+n;
+  return caravanLoad(s,s.townVisit.people,next).reason??'';
 }
 function supplyStatus(s){
   const contract=s.supplyContract;
@@ -2062,14 +2190,14 @@ function supplyStatus(s){
 }
 function marketMarkup(){
   const rows=(seasonal)=>Object.entries(marketOffers).filter(([,offer])=>(offer.season!==undefined)===seasonal).map(([id,offer])=>{
-    const reason=marketReason(state,offer);
-    return '<div class="row"><div><b>'+offer.label+'</b><small>'+costText(offer.cost)+' 换 '+costText(offer.reward)
+    const reason=marketReason(state,offer,id);
+    return '<div class="row"><div><b>'+offerLabel(offer)+'</b><small>'+cargoText(offer.cost)+' 换 '+cargoText(offer.reward)+ (offer.quota?' · 本季余 '+marketRemaining(state,id,offer)+' 批':'')
       +(offer.repGain?' · 声望 +'+offer.repGain:'')+'</small>'
       +(reason?'<small>'+esc(reason)+'</small>':'')+'</div>'
       +btn('交易','market','data-value="'+id+'"',reason)+'</div>';
   }).join('');
-  return '<section class="task-form"><h3>石桥坊市</h3><p class="muted">交易只使用未预留物资。供药订单每年限一次。</p>'
-    +rows(false)+'</section><section class="task-form"><h3>四季集市</h3><p class="muted">当前为'+seasons[season(state)]+'季。每项交易每年可完成一次。</p>'
+  return '<section class="task-form"><h3>石桥坊市</h3><p class="muted">交易使用随行货物，回程口粮已留出。供药订单每年限一次。</p><p>'+(cargoText(state.townVisit?.cargo)||'行囊无货')+'</p>'
+    +rows(false)+'<p>本地不收 · 筑基材料、筑基丹、青云木剑、典籍与契据。</p></section><section class="task-form"><h3>四季集市</h3><p class="muted">当前为'+seasons[season(state)]+'季。每项交易每年可完成一次。</p>'
     +rows(true)+'</section><section class="task-form"><h3>石桥镇供药契约</h3>'
     +'<p>签约两季。每次换季自动交付 8 份未预留的普通药材，获得 3 灵石和 1 点声望。缺货当季无报酬。</p>'
     +'<p>'+supplyStatus(state)+'</p>'+btn(state.supplyContract?'续签两季':'签订两季','sign-supply','',
@@ -2136,10 +2264,19 @@ function townApproachMarkup(){
   const i=Number(assignment.leader);
   const chosen=state.people[i]&&assignment.leader!==''?i:state.people.findIndex((_,n)=>free(state,n));
   if(!selectedPersonExplicitly)assignment.leader=chosen<0?'':String(chosen);
-  const spec=jobSpec(state,'visitTown',assignment.leader===''?[]:[chosen]);
-  return head+'<small>年度招徒 · '+esc(recruitStatus||(roster?'本年名册已保留，再到镇上即可查看和收徒':'抵达后可访徒'))+'</small>'+dispatchPicker(false,true)
-    +'<p><small>'+esc(spec.reason||routeText(state,spec.route,spec.duration)+' · 2 口粮')+'</small></p>'
-    +btn('前往石桥镇','visit-town','data-i="'+chosen+'" class="gold"',spec.reason);
+  const ids=marketParty();
+  const spec=jobSpec(state,'visitTown',ids);
+  const load=ids.length?caravanLoad(state,ids,{...marketCargo,food:(marketCargo.food??0)+4*ids.length}):null;
+  return head+'<small>年度招徒 · '+esc(recruitStatus||(roster?'本年名册已保留，再到镇上即可查看和收徒':'抵达后可访徒'))+'</small>'+dispatchPicker(true)
+    +'<details data-detail="market-cargo" open><summary>商队货单</summary><p>每人预留 4 份往返口粮。</p>'
+    +Object.keys(itemWeights).filter(id=>own(resources,id)||own(state.gear,id)).map(id=>{
+      const n=own(resources,id)?available(state,id):state.gear[id];
+      return n||marketCargo[id]?'<label>'+commodityName(id)+'（可用 '+n+'） <input type="number" min="0" max="'+n+'" value="'+(marketCargo[id]??0)+'" data-market-cargo="'+id+'"></label>':'';
+    }).join('')+'<p>'+(load?.reason??(load?'载重 '+load.weight/10+' / '+load.limit/10+' 斤':''))+'</p>'
+    +(load?.bags?'<small>'+load.bags.map(b=>esc(state.people[b.i].name)+' · '+(cargoText(b.items)||'空行囊')).join('；')+'</small>':'')
+    +(state.lastTradePack?btn('沿用上次货单','market-reuse'):'')+'</details>'
+    +'<p><small>'+esc(spec.reason||routeText(state,spec.route,spec.duration)+' · 往返 '+4*ids.length+' 口粮')+'</small></p>'
+    +btn('前往石桥镇','visit-town','class="gold"',spec.reason||load?.reason);
 }
 function refreshRecruitEvent(){
   const dialog=$('recruit-event'),plan=state.annualRecruit;
@@ -2225,6 +2362,7 @@ function assignmentPanel(){
   if(selectedBuilding==='quarry'&&state.flags.quarryRocks)html+='<p class="accent">! 山道落石</p><p>落石堵住了采石道。派弟子清理可恢复作业，带回 2 石料。</p>';
   const townServices=selectedBuilding==='town'?marketMarkup()+commissionsMarkup():'';
   if(selectedBuilding==='town')html+=recruitmentMarkup(state);
+  if(selectedBuilding==='mist5')html+='<p>采掘位 '+(state.jobs.some(j=>j.arg==='mist5'&&['harvest','develop'].includes(j.type))?'使用中':'空闲')+' · '+(state.flags.industry_mist5?'已支护 · 可排班':'支护后可排班 · 勘查后可手动试采')+'</p>';
   if(selectedBuilding==='farm')html+='<p class="muted">种药位 '+farmOccupied(state)+' / '+farmCapacity(state)+'。修缮后可反复扩建。</p>';
   if(selectedBuilding==='furnace')html+=productionMarkup(state)+'<p class="muted">丹炉使用 '+furnaceOccupied(state)+' / '+furnaceCapacity(state)+'。每增建一座，可同时多炼一炉。</p>';
   if(selectedBuilding==='study')html+='<p class="muted">静室使用 '+studyOccupied(state)+' / '+studyCapacity(state)+' 间。每建一间增加 1 个修行席位。</p>';
@@ -2283,7 +2421,7 @@ function actorStatus(p,i){
 function activityStatus(p,i){
   const j=jobFor(state,i);
   if(j)return (restingForFatigue(state,p)?'本轮后休息 · ':j.leisure?'自主 · ':'')+(own(industries,j.arg)?industryAction(j.type,j.arg):j.type==='repair'?repairs[j.arg][0]:j.type==='forge'?'打造'+gearNames[j.arg]:j.type==='manual'?'学习'+manuals[j.arg].name:tasks[j.type][0])+' · '+(j.end===null?'等待处理':clock(j.end));
-  if(state.townVisit?.person===i)return '在石桥镇 · 返回山门后继续排班';
+  if((state.townVisit?.people??[state.townVisit?.person]).includes(i))return '在石桥镇 · 返回山门后继续排班';
   if(restingForFatigue(state,p))return '疲劳休息 · '+clock(fatigueRecovery(state,p))
     +(p.rest>state.time?' · 受伤休养 '+clock(p.rest):'');
   if(p.rest>state.time)return '休养 · '+clock(p.rest);
@@ -2394,10 +2532,10 @@ function peopleMarkup(){
         +(level<2?' · '+count+'/'+(level===0?5:20):'')+'</span></div><small>'+effect+'（熟练／精通）</small>';
     }).join('')+'</section>'+mentorshipMarkup(p,i)+btn('安排每日作息','jump','data-value="schedule-page"')+end;
   const loadout=[
-    {slot:'weapon',label:'武器',mark:'剑',choices:['wood','iron','bow']},
-    {slot:'charm',label:'护身物',mark:'佩',choices:['','heart','jade']}
+    {slot:'weapon',label:'武器',mark:'剑',choices:['wood','iron','bow','starSword']},
+    {slot:'charm',label:'护身物',mark:'佩',choices:['','heart','jade','starArmor']}
   ];
-  const effects={bow:forgeRecipes.bow.effect,wood:'武器基础物攻 12',iron:'武器基础物攻 15',heart:'每场首次受击减伤 30%',jade:'灵力上限 +30%','':'空槽'};
+  const effects={starSword:forgeRecipes.starSword.effect,starArmor:forgeRecipes.starArmor.effect,bow:forgeRecipes.bow.effect,wood:'武器基础物攻 12',iron:'武器基础物攻 15',heart:'每场首次受击减伤 30%',jade:'灵力上限 +30%','':'空槽'};
   const equipment=loadout.map(({slot,label,mark,choices})=>{
     const equipped=p[slot];
     const options=choices.filter(k=>k===equipped||k==='wood'||!k||state.gear[k]);
@@ -2604,17 +2742,18 @@ function warehouse(){
   const s=state;
   const groups=[
     ['日常物资','粮',['food','stone']],['药材','药',['herbs','main','aux']],
-    ['丹药','丹',['pill','heal','qi']],['建筑材料','材',['wood','masonry']]
+    ['丹药','丹',['pill','heal','qi']],['建筑材料','材',['wood','masonry','starOre']]
   ];
+  const cargo=[s.townVisit?.cargo,...s.jobs.map(j=>j.cargo??j.returnCargo)].filter(Boolean);
   const stock='<div class="inventory-groups">'+groups.map(([title,mark,ids])=>
     '<section class="inventory-card"><h3><span class="inventory-mark" aria-hidden="true">'+mark+'</span>'+title+'</h3><dl>'+ids.map(id=>
-      '<div class="inventory-item'+(s.stock[id]===0?' is-empty':'')+'"><dt>'+resources[id]+'</dt><dd>'+s.stock[id]+'</dd></div>'
+      '<div class="inventory-item'+(s.stock[id]===0?' is-empty':'')+'"><dt>'+resources[id]+'</dt><dd>'+s.stock[id]+'<small>可动用 '+available(s,id)+' · 在途 '+cargo.reduce((sum,pack)=>sum+(pack[id]??0),0)+' · 估值 '+itemValues[id]+'</small></dd></div>'
     ).join('')+'</dl></section>'
   ).join('')+'</div>';
-  return '<h2>宗门仓库</h2>'+stock+'<h3>仓库管理</h3><div class="warehouse-tools">'+foodAccounts(s)+(s.supplyContract?'<details data-detail="supply"><summary>石桥镇供药</summary><p>'+supplyStatus(s)+'</p></details>':'')+'<details data-detail="reserve"><summary>预留筑基备料</summary>'
-    +['main','aux','herbs','pill'].map(id=>'<div class="row"><label>'+resources[id]+' <input type="number" min="0" max="'+s.stock[id]+'" value="'+(s.reserve[id]||0)+'" data-reserve="'+id+'"></label></div>').join('')
-    +'</details><details data-detail="archive"><summary>宗门典籍与契据 · '+s.archive.length+'</summary><p>'+s.archive.map(esc).join('、')+'</p></details>'
-    +'<details data-detail="gear"><summary>器物</summary><p>'+Object.keys(s.gear).map(id=>gearNames[id]+' '+s.gear[id]).join(' · ')+'</p><div class="actions">'
+  return '<h2>宗门总仓库</h2>'+workGoalInput(s,'starOre')+stock+'<h3>仓库管理</h3><div class="warehouse-tools">'+foodAccounts(s)+(s.supplyContract?'<details data-detail="supply"><summary>石桥镇供药</summary><p>'+supplyStatus(s)+'</p></details>':'')+'<details data-detail="reserve"><summary>总仓预留物资</summary>'
+    +['main','aux','herbs','pill','starOre'].map(id=>'<div class="row"><label>'+resources[id]+' <input type="number" min="0" max="'+s.stock[id]+'" value="'+(s.reserve[id]||0)+'" data-reserve="'+id+'"></label></div>').join('')
+    +'</details><details data-detail="archive"><summary>宗门典籍与契据 · '+s.archive.length+'</summary><p>'+s.archive.map(name=>esc(name)+'（估值 '+archiveValue(name)+'）').join('、')+'</p></details>'
+    +'<details data-detail="gear"><summary>器物</summary><p>'+Object.keys(s.gear).map(id=>gearNames[id]+' '+s.gear[id]+'（估值 '+itemValues[id]+'，在途 '+cargo.reduce((sum,pack)=>sum+(pack[id]??0),0)+'）').join(' · ')+'</p><div class="actions">'
     +[['iron','修旧铁剑',3,'stone'],['heart','换护心符',2,'stone'],['jade','换引灵佩',4,'herbs']].filter(([id])=>!s.flags['gear'+id])
       .map(([id,label,n,cost])=>btn(label+' · '+n+' '+resources[cost],'craftGear','data-value="'+id+'"',missing(s,{[cost]:n}))).join('')+'</div></details></div>';
 }
@@ -2715,11 +2854,13 @@ function weeklyMarkup(){
   const formatDelta=n=>n===0?'无变化':(n>0?'+':'')+n;
   return '<h2>山门周报</h2><p>每个游戏周为七天。换季时结算，并计入本次换季口粮。</p>'
     +(current?'<p>本周口粮净变化 <b>'+formatDelta(state.stock.food-current.food)+'</b></p>':'')
-    +(reports.length?reports.map(({week,foodDelta,breakthroughs,blocked},i)=>{
+    +(reports.length?reports.map(({week,foodDelta,breakthroughs,blocked,oreIn,oreSold,oreForged,oreEnd,marketStone,contractStone,mineStone,buildStone,forgeStone},i)=>{
       const waits=Object.entries(blocked).sort((a,b)=>b[1]-a[1]);
       const items=rows=>rows.length?'<ul>'+rows.map(label=>'<li>'+esc(label)+'</li>').join('')+'</ul>':'';
       return '<details class="week-report" data-week="'+week+'" '+(i===0?'open':'')+'>'
         +'<summary>第 '+(Math.floor(week/4)+1)+' 年 · '+seasons[week%4]+'季 · 口粮 '+formatDelta(foodDelta)+'</summary>'
+        +(oreEnd===undefined?'':'<p>碎星矿石 · 入库 '+(oreIn??0)+' · 售出 '+(oreSold??0)+' · 炼器 '+(oreForged??0)+' · 期末 '+oreEnd+'</p>')
+        +(oreEnd===undefined?'':'<p>灵石 · 坊市净额 '+formatDelta(marketStone??0)+' · 委托 '+(contractStone??0)+' · 矿道 '+(mineStone??0)+' · 营造支出 '+(buildStone??0)+' · 炼器支出 '+(forgeStone??0)+'</p>')
         +'<p><b>境界突破</b>'+(!breakthroughs.length?' · 无':'')+'</p>'+items(breakthroughs)
         +'<p><b>排班受阻</b>'+(!waits.length?' · 无':'')+'</p>'
         +items(waits.map(([reason,ms])=>reason+' · '+(ms/scheduleHour<0.1?'< 0.1':(ms/scheduleHour).toFixed(1))+' 游戏小时'))+'</details>';
@@ -2778,7 +2919,13 @@ function handle(e){
     render();(document.querySelector('#town-window[open]')??$('assignments')).querySelector('[data-kind="pick-dispatch"][data-i="'+i+'"]')?.focus({preventScroll:true});
     return;
   }
-  if(kind==='visit-town'){sync({kind:'start',task:'visitTown',ids:[i]});return;}
+  if(kind==='market-reuse'){
+    const saved=state.lastTradePack;
+    if(!saved)return;
+    selectedPersonExplicitly=true;assignment.leader=String(saved.ids[0]);assignment.partner=saved.ids.slice(1);
+    marketCargo={...saved.goods};render();return;
+  }
+  if(kind==='visit-town'){sync({kind:'depart-market',ids:marketParty(),cargo:{...marketCargo}});return;}
   if(kind==='town-recruit'){
     if(state.townVisit)sync({kind:'start',task:'recruit',ids:[state.townVisit.person]});
     return;
@@ -2872,6 +3019,7 @@ function handle(e){
 }
 function change(e){
   const el=e.target,{field,eventActor,form,token,n,i,reserve,gear}=el.dataset;
+  if(el.hasAttribute('data-market-cargo')){marketCargo[el.dataset.marketCargo]=Math.max(0,Math.floor(el.valueAsNumber||0));render();return;}
   if(el.hasAttribute('data-schedule-person')){selectedCharacter=Number(el.value);render();return;}
   if(el.hasAttribute('data-work-goal')){if(el.value!=='')sync({kind:'work-goal',value:el.dataset.workGoal,n:el.valueAsNumber});return;}
   if(el.hasAttribute('data-worksite')){sync({kind:'worksite',i:Number(i),mode:el.dataset.worksite,value:el.value});return;}
