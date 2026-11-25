@@ -152,7 +152,7 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
   <div class="row town-header"><h2 id="guide-title">新手指引</h2><form method="dialog"><button type="submit">关闭指引</button></form></div>
   <p class="guide-intro">第一次接印，可以先安排两件差事，边等结算边熟悉山门。下面的条目可以随时回来查。</p>
   <details open><summary>先让宗门运转</summary><ol><li>点「建筑」，选择静室或药圃。选好差事，点弟子的名字，再点「开始」。忙碌的人会显示原因。</li><li>先让掌门静修，再让阿禾照料药圃，两件事可以同时进行。药圃每轮产出口粮和药材。</li><li>等倒计时结束，收成会入仓。菜单出现「事件与战斗」提醒时，点进去处理选择。</li></ol><div class="actions"><button type="button" data-kind="guide-go" data-value="dispatch" data-site="study" data-task="meditate">安排静修</button><button type="button" data-kind="guide-go" data-value="dispatch" data-site="farm" data-task="farm">安排种药</button><button type="button" data-kind="guide-go" data-value="events">查看事件</button></div></details>
-  <details><summary>地图与出行</summary><p>打开「地图」，点击文字格子查看地点。选择差事后，点弟子方格组队，出发前看看口粮和预计用时。头像沿虚线移动。去石桥镇要先派人前往，抵达后由在镇的弟子操作坊市和访徒。</p><p>缺木材或石料时，去松林伐木场或青石采石场，按各地点显示的差事采集。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="map">打开地图</button></div></details>
+  <details><summary>地图与出行</summary><p>打开「地图」，点击文字格子查看地点。选择差事后，点弟子方格组队，出发前看看口粮和预计用时。头像沿虚线移动。去石桥镇要先派人前往，抵达后由在镇的弟子操作坊市和访徒。</p><p>缺木材或石料时，先去地图上的松林或青石坡勘查，再安排采集。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="map">打开地图</button></div></details>
   <details><summary>修行、功法与筑基</summary><ol><li>在静室修到炼气圆满（修为 100）。在「功法」页选修习者，按灵根和境界学习。已学内容在「人物 → 已学功法」，悬停功法名可看效果。</li><li>药圃每照料 3 轮收 1 份筑基主药。辅药去青崖后山找，队里有神识至少 6 的人可在岩背獾事件中选绕行，也可布阵迎战。</li><li>让掌门在丹房消耗主药、辅药各 1 份及普通药材 3 份炼丹，再让任意炼气圆满的成员去静室冲关。</li></ol><div class="actions"><button type="button" data-kind="guide-go" data-value="manuals">查看宗门功法</button><button type="button" data-kind="guide-go" data-value="dispatch" data-site="furnace" data-task="brew">前往丹房</button></div></details>
   <details><summary>设置作息与休息</summary><p>进「作息」，选弟子，再选种药、修行或休息等活动，点击小时格安排。可以先用「日常模板」再改几个时段。现实 30 秒等于游戏 1 小时，安排每天重复。</p><p>给弟子留出休息时间。自由时段由弟子根据状态行动，疲劳过高会优先休息。要手动派人时，先看人物状态和按钮旁的原因。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="schedule">设置作息</button></div></details>
   <details><summary>收徒与拜师</summary><p><strong>招募新弟子</strong>　先在山门厢房增建一处厢房，再把石桥镇声望升到 1（例如完成护送商队）。派人到镇上，点「年度招徒 → 开始访徒」。3 分钟后在弹窗挑人，每人需要 3 口粮和一张空床。开局每年可收 1 人，名册全年有效。</p><p><strong>安排师承</strong>　宗门有人筑基后，打开「人物」，选炼气弟子，进「差事与师承」拜师。双方空闲时可以请教功法或学习师父精通的差事。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="dispatch" data-site="gate" data-task="repair.room">前往山门厢房</button><button type="button" data-kind="guide-go" data-value="people">查看人物</button></div></details>
@@ -409,9 +409,15 @@ const travel = new Set([...Object.keys(townJobs),'survey','develop','harvest','h
 const groupTravel = new Set(['visitTown',...Object.keys(townJobs),'survey','harvest','hill','seek','patrol','rain','ape','temple','canal','outer']);
 const materialDuties={timber:['wood','forest','mist1'],masonry:['masonry','quarry','mist2'],starMining:['starOre','mist5']};
 const stockGoal=(s,id)=>s.workGoals?.[id]??(id==='starOre'?8:['wood','masonry'].includes(id)?12:0);
-const visibleDuty=(s,id)=>id!=='starMining'||!!s.flags.explored_mist5;
 const siteExplored=(s,id)=>Boolean(s.flags[(own(discoveries,id)?'explored_':'survey_')+id]);
-const materialSite=(p,mode)=>p.worksites?.[mode]??materialDuties[mode][1];
+const visibleDuty=(s,id)=>own(materialDuties,id)?materialDuties[id].slice(1).some(site=>siteExplored(s,site))
+  :['field','mine'].includes(id)?siteExplored(s,id):true;
+const materialSite=(s,p,mode)=>{
+  const saved=p.worksites?.[mode];
+  return saved&&siteExplored(s,saved)?saved:materialDuties[mode].slice(1).find(site=>siteExplored(s,site));
+};
+const unverifiedIndustryNames={forest:'松林',quarry:'青石坡',field:'山下荒地',mine:'山岭洞口'};
+const placeName=(s,id)=>own(unverifiedIndustryNames,id)&&!siteExplored(s,id)?unverifiedIndustryNames[id]:buildingActions[id].name;
 function plannedMaterial(s,id){
   return s.jobs.reduce((total,j)=>{
     const site=industries[j.arg];
@@ -1175,10 +1181,11 @@ function scheduleWaitReason(s,i){
   if(p.schedulePaused)return '自动安排已暂停';
   if((s.townVisit?.people??[s.townVisit?.person]).includes(i))return '在石桥镇，返回山门后继续排班';
   if(p.dutyPaused&&(mode==='duty'||workMode===p.duty&&own(materialDuties,workMode)))return '职务已暂停';
+  if(!visibleDuty(s,workMode))return '请先勘查采集地点';
   if(own(materialDuties,workMode)){
     const [id]=materialDuties[workMode];
     if(plannedMaterial(s,id)>=stockGoal(s,id))return resources[id]+'库存目标已足';
-    const site=materialSite(p,workMode);
+    const site=materialSite(s,p,workMode);
     return (workMode==='starMining'?scheduledIndustryReason(s,site):'')||jobSpec(s,'harvest',[i],site).reason;
   }
   if(workMode==='smith'){
@@ -1229,6 +1236,7 @@ function assignDuties(s){
       return;
     }
     const workMode=mode==='duty'?p.duty:mode;
+    if(!visibleDuty(s,workMode))return;
     if(own(materialDuties,workMode)||workMode==='smith'){
       if(p.duty===workMode&&p.dutyPaused)return;
       let task,arg;
@@ -1240,7 +1248,7 @@ function assignDuties(s){
         task='harvest';
         const [resource]=materialDuties[workMode];
         if(plannedMaterial(s,resource)<stockGoal(s,resource)){
-          const site=materialSite(p,workMode);
+          const site=materialSite(s,p,workMode);
           if(workMode!=='starMining'||!scheduledIndustryReason(s,site))arg=site;
         }
       }
@@ -1669,7 +1677,7 @@ function dispatch(s,a){
       return '请输入非负整数。';
     case 'worksite':
       if(p&&visibleDuty(s,a.mode)&&own(materialDuties,a.mode)&&materialDuties[a.mode].slice(1).includes(a.value)
-        &&(a.value===materialDuties[a.mode][1]||siteExplored(s,a.value))){
+        &&siteExplored(s,a.value)){
         p.worksites??={};p.worksites[a.mode]=a.value;return;
       }
       return '该采集地尚未解锁。';
@@ -1860,7 +1868,7 @@ function apply(current,command,wall){
   }
   for(const person of next.people){
     if(!visibleDuty(next,person.duty))person.duty='';
-    if(person.schedule&&!next.flags.explored_mist5&&person.schedule.includes('starMining'))person.schedule=person.schedule.map(mode=>visibleDuty(next,mode)?mode:'duty');
+    if(person.schedule?.some(mode=>!visibleDuty(next,mode)))person.schedule=person.schedule.map(mode=>visibleDuty(next,mode)?mode:'duty');
     if(person.stats.length>attributes.length){
       person.points=(person.points??0)+Math.max(0,person.stats[5]-3);
       person.stats=person.stats.slice(0,attributes.length);
@@ -2311,7 +2319,7 @@ function assignmentMarkup(){
   const pending=state.eventQueue.filter(e=>own(eventPlaces,e.id));
   const tiles=Object.entries(mapTiles).map(([index,id])=>{
     const i=Number(index), fog=fogTiles.includes(id)&&!state.flags['explored_'+id];
-    const name=id==='sect'?'青云宗':fog?'未探索 '+id.slice(4):buildingActions[id].name;
+    const name=id==='sect'?'青云宗':fog?'未探索 '+id.slice(4):placeName(state,id);
     return '<button class="map-tile'+(fog?' is-fog':'')+'" type="button" data-kind="map-tile" data-n="'+i
       +'" style="grid-area:'+(Math.floor(i/7)+1)+' / '+(i%7+1)+'" aria-pressed="'+(selectedTile===i)+'">'+name
       +((id==='quarry'&&state.flags.quarryRocks||pending.some(e=>eventPlaces[e.id]===id))?'<span class="map-alert" aria-label="待处理事件">!</span>':'')+'</button>';
@@ -2354,7 +2362,7 @@ function assignmentPanel(){
       +'<p>木材 '+state.stock.wood+' · 石料 '+state.stock.masonry+' · 灵石 '+state.stock.stone+'</p>'
       +Object.values(repairs).map(([name,minutes,cost,effect])=>'<small>'+name+' · '+costText(cost)
         +' · '+minutes+' 分钟 · '+effect+'</small>').join('')
-      +'<p class="muted">取料见地图「伐木场／采石场」，免口粮。</p>'
+      +'<p class="muted">取料先到地图勘查「松林／青石坡」，免口粮。</p>'
       +(projects.length?'<p>施工中</p>'+projects.map(j=>'<small>'+esc(state.people[j.people[0]].name)+' · '
         +(j.type==='repair'?repairs[j.arg][0]:j.type==='develop'?industries[j.arg].build:tasks.fortify[0])
         +' · '+clock(j.end)+'</small>').join(''):'')+'</details>';
@@ -2379,7 +2387,7 @@ function assignmentPanel(){
     html+='<p class="muted">'+(built?'已整修 · ':'')+(surveyed?'每趟产出 '+(site.base+(built?site.bonus:0))+' '+resources[site.item]
       +(built?(own(duties,selectedBuilding)?' · 可安排常驻管事。':''):' · 整修后产量提高。'):'先勘查，之后可派人采集。')+'</p>';
   }
-  html+='<div class="task-form"><h3>'+(own(discoveries,selectedBuilding)&&!state.flags['explored_'+selectedBuilding]?'未探索地块':building.name)+'</h3>';
+  html+='<div class="task-form"><h3>'+(own(discoveries,selectedBuilding)&&!state.flags['explored_'+selectedBuilding]?'未探索地块':placeName(state,selectedBuilding))+'</h3>';
   if(selectedBuilding==='farm'&&season(state)===0&&state.seasonClaims.spring!==year(state))
     html+='<div class="room-action">'+btn('春季选种 · 2 普通药材','seed','',missing(state,{herbs:2}))+'</div>';
   if(selectedBuilding==='water')html+=waterContract();
@@ -2477,11 +2485,11 @@ function dutyMarkup(p,i){
     +'</select></label>'+(duty?btn(p.dutyPaused?'恢复履职':'暂停履职',p.dutyPaused?'resume-duty':'pause-duty','data-i="'+i+'"'):'')
     +'</div>'+(description?'<small>'+description+'</small>':'')
     +Object.entries(materialDuties).filter(([mode])=>visibleDuty(state,mode)).map(([mode,[id,...sites]])=>{
-      const selected=materialSite(p,mode);
+      const selected=materialSite(state,p,mode);
       const status=selected==='quarry'&&state.flags.quarryRocks?'山道落石，等待清理'
         :!siteExplored(state,selected)?'请先勘查':mode==='starMining'&&!state.flags.industry_mist5?'支护后可排班':plannedMaterial(state,id)>=stockGoal(state,id)?'库存目标已足':'等待排班';
       return '<div class="row"><label>'+resources[id]+'来源 <select data-worksite="'+mode+'" data-i="'+i+'">'
-        +sites.filter((site,index)=>index===0||siteExplored(state,site)).map(site=>option(site,industries[site].name,site===selected)).join('')
+        +sites.filter(site=>siteExplored(state,site)).map(site=>option(site,industries[site].name,site===selected)).join('')
         +'</select></label>'+workGoalInput(state,id)+'<small>'+status+'</small></div>';
     }).join('')+'</section>';
 }
