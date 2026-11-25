@@ -139,6 +139,8 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
 .top-stock{gap:4px 13px;margin-bottom:14px;padding:5px 9px;border:1px solid var(--line);border-radius:5px;background:var(--surface)}
 .top-stock span{display:inline-flex;align-items:baseline;gap:6px;flex:0 0 auto;min-width:0;border:0;background:none;padding:0;border-radius:0;font-size:14px;color:var(--ink);white-space:nowrap}
 .top-stock b{font-size:15px;font-variant-numeric:tabular-nums}
+.stock-hint{background:none;border:0;padding:0;color:var(--ink);font:inherit;text-align:left;text-decoration:underline dotted;text-underline-offset:3px}
+.stock-hint:hover:not(:disabled){background:none;color:var(--gold)}
 </style>
 
 <dialog id="recruit-event" class="town-window" aria-label="招徒名册"></dialog>
@@ -2752,6 +2754,8 @@ function foodAccounts(s){
     +'<p class="muted">每季每人消耗 2 口粮。坊市卖粮和耗粮差事会留出保底。结算缺粮时先扣现有口粮。</p>'
     +(last?'<p>上次结算 '+last.paid+'/'+last.due+' 口粮</p>':'')+'</details>';
 }
+const itemBriefs={food:'供弟子办差和商队赶路。',stone:'坊市货币，也可用于营造和炼器。',herbs:'常见炼丹材料，也可出售。',main:'药圃培育的筑基丹主料。',aux:'后山获取的筑基丹辅料。',pill:'供炼气圆满的弟子冲关。',heal:'战斗中可用于恢复气血。',qi:'静修时服用，提高当轮修为。',wood:'用于建设、矿脉支护和炼器。',masonry:'用于营造、修缮与矿脉支护。',starOre:'可打造碎星剑和碎星护甲，也可运去石桥坊市出售。'};
+const stockHint=(label,brief)=>'<button type="button" class="stock-hint" data-stock-hint="'+esc(brief)+'">'+esc(label)+'</button>';
 function warehouse(){
   const s=state;
   const groups=[
@@ -2759,15 +2763,19 @@ function warehouse(){
     ['丹药','丹',['pill','heal','qi']],['建筑材料','材',['wood','masonry','starOre']]
   ];
   const cargo=[s.townVisit?.cargo,...s.jobs.map(j=>j.cargo??j.returnCargo)].filter(Boolean);
-  const stock='<div class="inventory-groups">'+groups.map(([title,mark,ids])=>
+  const inTransit=id=>cargo.reduce((sum,pack)=>sum+(pack[id]??0),0);
+  const present=id=>(s.stock[id]??s.gear[id]??0)>0||inTransit(id)>0;
+  const itemName=id=>stockHint(commodityName(id),(itemBriefs[id]??forgeRecipes[id]?.effect??'宗门器物')+'｜单件 '+itemWeights[id]/10+' 斤 · 基准估值 '+itemValues[id]+' 灵石');
+  const visibleGroups=groups.map(([title,mark,ids])=>[title,mark,ids.filter(present)]).filter(([, ,ids])=>ids.length);
+  const stock=!visibleGroups.length?'<p>仓库暂无物资。</p>':'<div class="inventory-groups">'+visibleGroups.map(([title,mark,ids])=>
     '<section class="inventory-card"><h3><span class="inventory-mark" aria-hidden="true">'+mark+'</span>'+title+'</h3><dl>'+ids.map(id=>
-      '<div class="inventory-item'+(s.stock[id]===0?' is-empty':'')+'"><dt>'+resources[id]+'</dt><dd>'+s.stock[id]+'<small>可动用 '+available(s,id)+' · 在途 '+cargo.reduce((sum,pack)=>sum+(pack[id]??0),0)+' · 估值 '+itemValues[id]+'</small></dd></div>'
+      '<div class="inventory-item'+(s.stock[id]===0?' is-empty':'')+'"><dt>'+itemName(id)+'</dt><dd>'+s.stock[id]+'<small>可动用 '+available(s,id)+' · 在途 '+inTransit(id)+'</small></dd></div>'
     ).join('')+'</dl></section>'
   ).join('')+'</div>';
   return '<h2>宗门总仓库</h2>'+(s.flags.explored_mist5?workGoalInput(s,'starOre'):'')+stock+'<h3>仓库管理</h3><div class="warehouse-tools">'+foodAccounts(s)+(s.supplyContract?'<details data-detail="supply"><summary>石桥镇供药</summary><p>'+supplyStatus(s)+'</p></details>':'')+'<details data-detail="reserve"><summary>总仓预留物资</summary>'
-    +['main','aux','herbs','pill',...(s.flags.explored_mist5||s.stock.starOre>0?['starOre']:[])].map(id=>'<div class="row"><label>'+resources[id]+' <input type="number" min="0" max="'+s.stock[id]+'" value="'+(s.reserve[id]||0)+'" data-reserve="'+id+'"></label></div>').join('')
-    +'</details><details data-detail="archive"><summary>宗门典籍与契据 · '+s.archive.length+'</summary><p>'+s.archive.map(name=>esc(name)+'（估值 '+archiveValue(name)+'）').join('、')+'</p></details>'
-    +'<details data-detail="gear"><summary>器物</summary><p>'+Object.keys(s.gear).map(id=>gearNames[id]+' '+s.gear[id]+'（估值 '+itemValues[id]+'，在途 '+cargo.reduce((sum,pack)=>sum+(pack[id]??0),0)+'）').join(' · ')+'</p><div class="actions">'
+    +['main','aux','herbs','pill',...(s.flags.explored_mist5||s.stock.starOre>0?['starOre']:[])].filter(id=>s.stock[id]>0).map(id=>'<div class="row"><label>'+resources[id]+' <input type="number" min="0" max="'+s.stock[id]+'" value="'+(s.reserve[id]||0)+'" data-reserve="'+id+'"></label></div>').join('')
+    +'</details><details data-detail="archive"><summary>宗门典籍与契据 · '+s.archive.length+'</summary><p>'+s.archive.map(name=>stockHint(name,'宗门收藏，可用于传承或事件。基准估值 '+archiveValue(name)+' 灵石')).join('、')+'</p></details>'
+    +'<details data-detail="gear"><summary>器物</summary><p>'+(Object.keys(s.gear).filter(present).map(id=>itemName(id)+' '+s.gear[id]+(inTransit(id)?'（在途 '+inTransit(id)+'）':'')).join(' · ')||'暂无入库或在途器物。')+'</p><div class="actions">'
     +[['iron','修旧铁剑',3,'stone'],['heart','换护心符',2,'stone'],['jade','换引灵佩',4,'herbs']].filter(([id])=>!s.flags['gear'+id])
       .map(([id,label,n,cost])=>btn(label+' · '+n+' '+resources[cost],'craftGear','data-value="'+id+'"',missing(s,{[cost]:n}))).join('')+'</div></details></div>';
 }
@@ -3162,7 +3170,7 @@ function showManualHint(trigger){
   hint.id='manual-hint';
   hint.role='tooltip';
   hint.trigger=trigger;
-  hint.innerHTML='<strong>'+esc(book.name)+'</strong><small>'+esc(book.intro)+'</small>'
+  hint.innerHTML=trigger.hasAttribute('data-stock-hint')?'<strong>'+esc(trigger.textContent)+'</strong><small>'+esc(trigger.dataset.stockHint)+'</small>':'<strong>'+esc(book.name)+'</strong><small>'+esc(book.intro)+'</small>'
     +(book.bonus?'<small>主修熟练（3） · '+esc(book.bonus)+'</small>':'')
     +(book.master?'<small>主修圆满（6） · '+esc(book.master)+'</small>':'')
     +(book.art?'<small>习得术法</small>'+artDescription(p,book.art):'');
@@ -3173,7 +3181,7 @@ function showManualHint(trigger){
   hint.style.top=Math.max(8,r.bottom+h+16<=innerHeight?r.bottom+8:r.top-h-8)+'px';
 }
 document.addEventListener('pointerover',event=>{
-  const trigger=event.target.closest('[data-manual-hint]');
+  const trigger=event.target.closest('[data-manual-hint],[data-stock-hint]');
   if(trigger&&event.pointerType!=='touch')showManualHint(trigger);
 });
 document.addEventListener('pointerout',event=>{
@@ -3181,14 +3189,14 @@ document.addEventListener('pointerout',event=>{
   if(trigger?.contains(event.target)&&!trigger.contains(event.relatedTarget))hideManualHint();
 });
 document.addEventListener('focusin',event=>{
-  const trigger=event.target.closest('[data-manual-hint]');
+  const trigger=event.target.closest('[data-manual-hint],[data-stock-hint]');
   if(trigger)showManualHint(trigger);
 });
 document.addEventListener('focusout',event=>{
   if(event.target===$('manual-hint')?.trigger)hideManualHint();
 });
 document.addEventListener('click',event=>{
-  const trigger=event.target.closest('[data-manual-hint]');
+  const trigger=event.target.closest('[data-manual-hint],[data-stock-hint]');
   if(trigger)showManualHint(trigger);
   else hideManualHint();
 });
