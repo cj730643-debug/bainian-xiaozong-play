@@ -136,6 +136,9 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
 .guide-intro{margin:8px 0 0}.guide-quick{margin-top:12px}.guide-quick p{margin:0 0 8px}.guide-quick .actions{margin:0}#new-player-guide{width:min(720px,calc(100% - 24px))}#new-player-guide details{margin-top:8px;padding:8px 12px;border:1px solid var(--line);border-radius:8px}#new-player-guide summary{font-weight:700}#new-player-guide li+li{margin-top:5px}
 #restart-dialog{width:min(460px,calc(100% - 24px))}.restart-button{color:#813929;border-color:#b58173;background:#f4e7de}.restart-button:hover:not(:disabled){background:#ebd4c7}
 .division-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}.division-list article>p{margin:8px 0}.division-list .actions{margin-top:10px}.week-report{margin:8px 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px}.week-report summary{font-weight:700}.week-report ul{padding-inline-start:1.35em}
+.top-stock{gap:4px 13px;margin-bottom:14px;padding:5px 9px;border:1px solid var(--line);border-radius:5px;background:var(--surface)}
+.top-stock span{display:inline-flex;align-items:baseline;gap:6px;flex:0 0 auto;min-width:0;border:0;background:none;padding:0;border-radius:0;font-size:14px;color:var(--ink);white-space:nowrap}
+.top-stock b{font-size:15px;font-variant-numeric:tabular-nums}
 </style>
 
 <dialog id="recruit-event" class="town-window" aria-label="招徒名册"></dialog>
@@ -1960,7 +1963,7 @@ async function sync(command){
 try{channel=new BroadcastChannel(key);channel.onmessage=()=>sync();}catch{}
 
 function resourcesMarkup(compact=false){
-  const ids=compact?['food','herbs','stone','pill']:Object.keys(resources);
+  const ids=compact?['food','herbs','stone','pill']:Object.keys(resources).filter(id=>state.stock[id]>0);
   return ids.map(id=>'<span>'+resources[id]+' <b>'+state.stock[id]+'</b></span>').join('');
 }
 function personOptions(selected,includeNone=false){
@@ -2794,7 +2797,9 @@ function render(){
   if(!state.created){setup();return;}
   const expanded=new Set([...document.querySelectorAll('details[open][data-detail]')].map(p=>p.dataset.detail));
   $('calendar').innerHTML=calendarMarkup();
-  $('resources').innerHTML=resourcesMarkup();
+  const stockBar=$('resources');
+  stockBar.innerHTML=resourcesMarkup();
+  stockBar.hidden=!stockBar.childElementCount;
   const waiting=state.eventQueue.length;
   $('objective').innerHTML='<div class="chapter-body"><h2>宗门事务</h2><div class="actions">'
     +btn('建筑','view','data-value="dispatch" class="gold"')+btn('地图','view','data-value="map"')
