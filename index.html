@@ -141,6 +141,14 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
 .top-stock b{font-size:15px;font-variant-numeric:tabular-nums}
 .stock-hint{background:none;border:0;padding:0;color:var(--ink);font:inherit;text-align:left;text-decoration:underline dotted;text-underline-offset:3px}
 .stock-hint:hover:not(:disabled){background:none;color:var(--gold)}
+#manual-hint.stock-tooltip{box-sizing:border-box;width:288px;max-width:calc(100vw - 24px);padding:15px 16px;background:#192a24;color:#fff8e8;border:1px solid #66786a;border-top:3px solid #e3bb7c;border-radius:10px;box-shadow:0 10px 28px #14211c55}
+.stock-tip-title{display:block;font-size:19px;line-height:1.3;font-weight:750}
+.stock-tip-brief{margin:6px 0 11px;color:#e1e9e1;font-size:15px;line-height:1.55;overflow-wrap:anywhere}
+.stock-tip-metrics{display:grid;grid-auto-columns:minmax(0,1fr);grid-auto-flow:column;gap:8px}
+.stock-tip-metrics>div{background:#263a31;border-radius:5px;padding:7px 9px}
+.stock-tip-metrics>div>span{display:block;color:#d4dfd5;font-size:12px}
+.stock-tip-metrics b{display:block;color:#ffe0a4;font-size:18px;font-variant-numeric:tabular-nums}
+.stock-tip-metrics b span{font-size:12px;color:#e2eade;font-weight:500}
 </style>
 
 <dialog id="recruit-event" class="town-window" aria-label="招徒名册"></dialog>
@@ -2755,7 +2763,8 @@ function foodAccounts(s){
     +(last?'<p>上次结算 '+last.paid+'/'+last.due+' 口粮</p>':'')+'</details>';
 }
 const itemBriefs={food:'供弟子办差和商队赶路。',stone:'坊市货币，也可用于营造和炼器。',herbs:'常见炼丹材料，也可出售。',main:'药圃培育的筑基丹主料。',aux:'后山获取的筑基丹辅料。',pill:'供炼气圆满的弟子冲关。',heal:'战斗中可用于恢复气血。',qi:'静修时服用，提高当轮修为。',wood:'用于建设、矿脉支护和炼器。',masonry:'用于营造、修缮与矿脉支护。',starOre:'可打造碎星剑和碎星护甲，也可运去石桥坊市出售。'};
-const stockHint=(label,brief)=>'<button type="button" class="stock-hint" data-stock-hint="'+esc(brief)+'">'+esc(label)+'</button>';
+const stockHint=(label,brief,value,weight)=>'<button type="button" class="stock-hint" data-stock-hint="'+esc(brief)
+  +'" data-stock-value="'+esc(value)+'"'+(weight===undefined?'':' data-stock-weight="'+esc(weight)+'"')+'>'+esc(label)+'</button>';
 function warehouse(){
   const s=state;
   const groups=[
@@ -2765,7 +2774,7 @@ function warehouse(){
   const cargo=[s.townVisit?.cargo,...s.jobs.map(j=>j.cargo??j.returnCargo)].filter(Boolean);
   const inTransit=id=>cargo.reduce((sum,pack)=>sum+(pack[id]??0),0);
   const present=id=>(s.stock[id]??s.gear[id]??0)>0||inTransit(id)>0;
-  const itemName=id=>stockHint(commodityName(id),(itemBriefs[id]??forgeRecipes[id]?.effect??'宗门器物')+'｜单件 '+itemWeights[id]/10+' 斤 · 基准估值 '+itemValues[id]+' 灵石');
+  const itemName=id=>stockHint(commodityName(id),itemBriefs[id]??forgeRecipes[id]?.effect??'宗门器物',itemValues[id],itemWeights[id]/10);
   const visibleGroups=groups.map(([title,mark,ids])=>[title,mark,ids.filter(present)]).filter(([, ,ids])=>ids.length);
   const stock=!visibleGroups.length?'<p>仓库暂无物资。</p>':'<div class="inventory-groups">'+visibleGroups.map(([title,mark,ids])=>
     '<section class="inventory-card"><h3><span class="inventory-mark" aria-hidden="true">'+mark+'</span>'+title+'</h3><dl>'+ids.map(id=>
@@ -2774,7 +2783,7 @@ function warehouse(){
   ).join('')+'</div>';
   return '<h2>宗门总仓库</h2>'+(s.flags.explored_mist5?workGoalInput(s,'starOre'):'')+stock+'<h3>仓库管理</h3><div class="warehouse-tools">'+foodAccounts(s)+(s.supplyContract?'<details data-detail="supply"><summary>石桥镇供药</summary><p>'+supplyStatus(s)+'</p></details>':'')+'<details data-detail="reserve"><summary>总仓预留物资</summary>'
     +['main','aux','herbs','pill',...(s.flags.explored_mist5||s.stock.starOre>0?['starOre']:[])].filter(id=>s.stock[id]>0).map(id=>'<div class="row"><label>'+resources[id]+' <input type="number" min="0" max="'+s.stock[id]+'" value="'+(s.reserve[id]||0)+'" data-reserve="'+id+'"></label></div>').join('')
-    +'</details><details data-detail="archive"><summary>宗门典籍与契据 · '+s.archive.length+'</summary><p>'+s.archive.map(name=>stockHint(name,'宗门收藏，可用于传承或事件。基准估值 '+archiveValue(name)+' 灵石')).join('、')+'</p></details>'
+    +'</details><details data-detail="archive"><summary>宗门典籍与契据 · '+s.archive.length+'</summary><p>'+s.archive.map(name=>stockHint(name,'宗门收藏，可用于传承或事件。',archiveValue(name))).join('、')+'</p></details>'
     +'<details data-detail="gear"><summary>器物</summary><p>'+(Object.keys(s.gear).filter(present).map(id=>itemName(id)+' '+s.gear[id]+(inTransit(id)?'（在途 '+inTransit(id)+'）':'')).join(' · ')||'暂无入库或在途器物。')+'</p><div class="actions">'
     +[['iron','修旧铁剑',3,'stone'],['heart','换护心符',2,'stone'],['jade','换引灵佩',4,'herbs']].filter(([id])=>!s.flags['gear'+id])
       .map(([id,label,n,cost])=>btn(label+' · '+n+' '+resources[cost],'craftGear','data-value="'+id+'"',missing(s,{[cost]:n}))).join('')+'</div></details></div>';
@@ -3161,6 +3170,12 @@ function hideManualHint(){
   if(hint?.trigger)hint.trigger.removeAttribute('aria-describedby');
   hint?.remove();
 }
+function stockHintMarkup(label,{stockHint,stockWeight,stockValue}){
+  const metric=(name,value,unit)=>'<div><span>'+name+'</span><b>'+esc(value)+' <span>'+unit+'</span></b></div>';
+  return '<strong class="stock-tip-title">'+esc(label)+'</strong><p class="stock-tip-brief">'+esc(stockHint)+'</p>'
+    +'<div class="stock-tip-metrics">'+(stockWeight===undefined?'':metric('单件重量',stockWeight,'斤'))
+    +metric('基准估值',stockValue,'灵石')+'</div>';
+}
 function showManualHint(trigger){
   if($('manual-hint')?.trigger===trigger)return;
   hideManualHint();
@@ -3170,7 +3185,9 @@ function showManualHint(trigger){
   hint.id='manual-hint';
   hint.role='tooltip';
   hint.trigger=trigger;
-  hint.innerHTML=trigger.hasAttribute('data-stock-hint')?'<strong>'+esc(trigger.textContent)+'</strong><small>'+esc(trigger.dataset.stockHint)+'</small>':'<strong>'+esc(book.name)+'</strong><small>'+esc(book.intro)+'</small>'
+  const isStock=trigger.hasAttribute('data-stock-hint');
+  if(isStock)hint.className='stock-tooltip';
+  hint.innerHTML=isStock?stockHintMarkup(trigger.textContent,trigger.dataset):'<strong>'+esc(book.name)+'</strong><small>'+esc(book.intro)+'</small>'
     +(book.bonus?'<small>主修熟练（3） · '+esc(book.bonus)+'</small>':'')
     +(book.master?'<small>主修圆满（6） · '+esc(book.master)+'</small>':'')
     +(book.art?'<small>习得术法</small>'+artDescription(p,book.art):'');
