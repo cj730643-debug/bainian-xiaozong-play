@@ -1814,7 +1814,8 @@ function dispatch(s,a){
       p[a.slot]=a.value;return;
     }
     case 'craftGear':{
-      const costs={iron:{stone:3},jade:{herbs:4},heart:{stone:2}};
+      if(!s.built.workshop)return '请先建造炼器工坊。';
+      const costs={iron:{stone:3},jade:{herbs:4}};
       if(!own(costs,a.value)||s.flags['gear'+a.value])break;
       if(!spend(s,costs[a.value]))return missing(s,costs[a.value]);
       s.gear[a.value]++;mark(s,'gear'+a.value);return;
@@ -2378,6 +2379,10 @@ function assignmentPanel(){
         +' · '+clock(j.end)+'</small>').join(''):'')+'</details>';
   }
   if(selectedBuilding==='workshop'&&state.built.workshop){
+    const workshopRepairs=[['iron','修旧铁剑',3,'stone'],['jade','换引灵佩',4,'herbs']].filter(([id])=>!state.flags['gear'+id]);
+    if(workshopRepairs.length)html+='<section class="task-form"><h3>修复与换取</h3><div class="actions">'
+      +workshopRepairs.map(([id,label,n,cost])=>btn(label+' · '+n+' '+resources[cost],'craftGear','data-value="'+id+'"',missing(state,{[cost]:n}))).join('')
+      +'</div></section>';
     html+='<section class="task-form"><h3>炼器配方</h3>'+Object.entries(forgeRecipes).map(([id,recipe])=>
       '<div class="row"><span>'+gearNames[id]+'<small>'+costText(recipe.cost)+' · '+recipe.duration+' 分钟 · '+recipe.effect+'</small></span>'
       +'<b>在库 '+state.gear[id]+' · 在制 '+state.jobs.filter(j=>j.type==='forge'&&j.arg===id).length+'</b>'
@@ -2784,9 +2789,7 @@ function warehouse(){
   return '<h2>宗门总仓库</h2>'+(s.flags.explored_mist5?workGoalInput(s,'starOre'):'')+stock+'<h3>仓库管理</h3><div class="warehouse-tools">'+foodAccounts(s)+(s.supplyContract?'<details data-detail="supply"><summary>石桥镇供药</summary><p>'+supplyStatus(s)+'</p></details>':'')+'<details data-detail="reserve"><summary>总仓预留物资</summary>'
     +['main','aux','herbs','pill',...(s.flags.explored_mist5||s.stock.starOre>0?['starOre']:[])].filter(id=>s.stock[id]>0).map(id=>'<div class="row"><label>'+resources[id]+' <input type="number" min="0" max="'+s.stock[id]+'" value="'+(s.reserve[id]||0)+'" data-reserve="'+id+'"></label></div>').join('')
     +'</details><details data-detail="archive"><summary>宗门典籍与契据 · '+s.archive.length+'</summary><p>'+s.archive.map(name=>stockHint(name,'宗门收藏，可用于传承或事件。',archiveValue(name))).join('、')+'</p></details>'
-    +'<details data-detail="gear"><summary>器物</summary><p>'+(Object.keys(s.gear).filter(present).map(id=>itemName(id)+' '+s.gear[id]+(inTransit(id)?'（在途 '+inTransit(id)+'）':'')).join(' · ')||'暂无入库或在途器物。')+'</p><div class="actions">'
-    +[['iron','修旧铁剑',3,'stone'],['heart','换护心符',2,'stone'],['jade','换引灵佩',4,'herbs']].filter(([id])=>!s.flags['gear'+id])
-      .map(([id,label,n,cost])=>btn(label+' · '+n+' '+resources[cost],'craftGear','data-value="'+id+'"',missing(s,{[cost]:n}))).join('')+'</div></details></div>';
+    +'<details data-detail="gear"><summary>器物</summary><p>'+(Object.keys(s.gear).filter(present).map(id=>itemName(id)+' '+s.gear[id]+(inTransit(id)?'（在途 '+inTransit(id)+'）':'')).join(' · ')||'暂无入库或在途器物。')+'</p></details></div>';
 }
 function setup(){
   let left=33-draft.stats.reduce((a,b)=>a+b,0);
