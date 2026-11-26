@@ -190,7 +190,7 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
   <p class="guide-intro">第一次接印，可以先安排两件差事，边等结算边熟悉山门。下面的条目可以随时回来查。</p>
   <details open><summary>先让宗门运转</summary><ol><li>打开「山门内」，选中仓库再点「进入」，查看开局建材。</li><li>选一处废墟进入，派空闲弟子清理。完工后再进入，选择修缮。</li><li>正式设施完工后可使用对应功能。修静室前，可以安排一人在大厅临时打坐。</li></ol></details>
   <details><summary>地图与出行</summary><p>打开「地图」，点击文字格子查看地点。选择差事后，点弟子方格组队，出发前看看口粮和预计用时。头像沿虚线移动。去石桥镇要先派人前往，抵达后由在镇的弟子操作坊市和访徒。</p><p>缺木材或石料时，先去地图上的松林或青石坡勘查，再安排采集。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="map">打开地图</button></div></details>
-  <details><summary>修行、功法与筑基</summary><ol><li>在静室修到炼气圆满（修为 100）。在「功法」页选修习者，按灵根和境界学习。已学内容在「人物 → 已学功法」，悬停功法名可看效果。</li><li>青叶草种开局可得，石根草种从后山采药取得，凝露草种由岩背獾守护。</li><li>让掌门在丹房消耗青叶草 3 株、石根草 2 株、凝露草 1 株炼丹，再让任意炼气圆满的成员去静室冲关。</li></ol><div class="actions"><button type="button" data-kind="guide-go" data-value="manuals">查看宗门功法</button><button type="button" data-kind="guide-go" data-value="dispatch" data-site="furnace" data-task="brew">前往丹房</button></div></details>
+  <details><summary>修行、功法与筑基</summary><ol><li>在静室修到炼气圆满（修为 100）。在「功法」页选修习者，按灵根和境界学习。已学内容在「人物 → 已学功法」，悬停功法名可看效果。</li><li>青叶草种开局可得，石根草种从后山采药取得，凝露草种由岩背獾守护。</li><li>让掌门在丹房消耗青叶草 6 株、石根草 4 株、凝露草 2 株炼丹，再让任意炼气圆满的成员去静室冲关。</li></ol><div class="actions"><button type="button" data-kind="guide-go" data-value="manuals">查看宗门功法</button><button type="button" data-kind="guide-go" data-value="dispatch" data-site="furnace" data-task="brew">前往丹房</button></div></details>
   <details><summary>设置作息与休息</summary><p>进「作息」，选弟子，再选种药、修行或休息等活动，点击小时格安排。可以先用「日常模板」再改几个时段。现实 30 秒等于游戏 1 小时，安排每天重复。</p><p>给弟子留出休息时间。自由时段由弟子根据状态行动，疲劳过高会优先休息。要手动派人时，先看人物状态和按钮旁的原因。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="schedule">设置作息</button></div></details>
   <details><summary>收徒与拜师</summary><p><strong>招募新弟子</strong>　先在山门厢房增建一处厢房，再把石桥镇声望升到 1（例如完成护送商队）。派人到镇上，点「年度招徒 → 开始访徒」。3 分钟后在弹窗挑人，每人需要 3 口粮和一张空床。开局每年可收 1 人，名册全年有效。</p><p><strong>安排师承</strong>　宗门有人筑基后，打开「人物」，选炼气弟子，进「差事与师承」拜师。双方空闲时可以请教功法或学习师父精通的差事。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="dispatch" data-site="gate" data-task="repair.room">前往山门厢房</button><button type="button" data-kind="guide-go" data-value="people">查看人物</button></div></details>
   <details><summary>战斗、仓库与小窗</summary><p>遇战斗先到「事件与战斗」查看小队。前卫优先扛伤，后援输出或施法。战斗按有效身法自动行动，首次遇敌可用神识探查。战后受伤的弟子需要休养。</p><p>「宗门仓库」可看资源、账房和预留备料。页首可以开启画中画，方便边做别的事边看差事和待办。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="dispatch" data-site="store" data-enter="true">查看宗门仓库</button></div></details>
@@ -350,7 +350,7 @@ const attributes = ['根骨','悟性','体魄','身法','神识'];
 const seasons = ['春','夏','秋','冬'];
 const crops={grainSeed:['谷物','谷种','food',6,1],leafSeed:['青叶草','青叶草种','greenLeaf',4,1],rootSeed:['石根草','石根草种','stoneRoot',3,1],dewSeed:['凝露草','凝露草种','dewGrass',2,2]};
 const seeds=Object.keys(crops), herbsForPill=['greenLeaf','stoneRoot','dewGrass'];
-const foundationRecipe={greenLeaf:3,stoneRoot:2,dewGrass:1};
+const foundationRecipe={greenLeaf:6,stoneRoot:4,dewGrass:2};
 const resources = {food:'口粮',herbs:'普通药材',stone:'灵石',greenLeaf:'青叶草',stoneRoot:'石根草',dewGrass:'凝露草',...Object.fromEntries(seeds.map(id=>[id,crops[id][1]])),pill:'筑基丹',heal:'疗伤丹',qi:'聚气丹',wood:'木材',masonry:'石料',starOre:'碎星矿石'};
 const arts = {guard:'护身诀',stone:'飞石术',vine:'缠藤术',stream:'引流护行',pierce:'破甲剑',recover:'回息术',burn:'燃火术'};
 const elements=['金','木','水','火','土'];
@@ -482,7 +482,7 @@ const duties={
   heal:['丹房执事','heal','按丹房库存目标补丹'],
   patrol:['巡山队长','patrol','空闲时巡山，每趟消耗 2 口粮']
 };
-const itemValues={food:0.125,herbs:0.25,stone:1,greenLeaf:2,stoneRoot:3,dewGrass:8,grainSeed:0.5,leafSeed:0.5,rootSeed:1,dewSeed:2,pill:30,heal:0.75,qi:1,wood:0.2,masonry:0.25,starOre:0.5,
+const itemValues={food:0.125,herbs:0.25,stone:1,greenLeaf:1,stoneRoot:1.5,dewGrass:4,grainSeed:0.5,leafSeed:0.5,rootSeed:1,dewSeed:2,pill:30,heal:0.75,qi:1,wood:0.2,masonry:0.25,starOre:0.5,
   woodSword:0.5,bow:2,iron:4,heart:3,jade:4,starSword:5,starArmor:6};
 const itemWeights={food:5,herbs:2,stone:1,greenLeaf:2,stoneRoot:2,dewGrass:2,grainSeed:1,leafSeed:1,rootSeed:1,dewSeed:1,pill:1,heal:1,qi:1,wood:20,masonry:30,starOre:15,
   woodSword:10,bow:20,iron:30,heart:1,jade:1,starSword:40,starArmor:50};
