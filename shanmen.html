@@ -265,16 +265,16 @@ const events={
     ]
   },
   moss:{
-    title:'药畦生灵苔',
-    text:'{name}发现药畦一夜生出青苔。石桥镇的药农说，这种苔已有二十年没见过。',
+    title:'药田里的野青叶',
+    text:'{name}在田埂发现几株结籽的野青叶。镇上的药农愿意帮忙筛种，也愿意收下鲜草。',
     choices:[
-      {label:'留种育苗',delta:{food:-2,herbs:4},result:'{name}拿口粮换来育苗土，保住了这一茬灵苔。'},
-      {label:'采下换粮',delta:{food:3},result:'{name}赶在灵苔干枯前带去镇上，换回一袋粮。'}
+      {label:'留种育苗',delta:{food:-2,leafSeed:2},result:'{name}请药农筛出两份青叶草种，收进仓库。'},
+      {label:'采下换粮',delta:{food:3},result:'{name}把鲜草交给药农，换回 3 份口粮。'}
     ]
   },
   ditch:{
     title:'旧渠渗水',
-    text:'{name}挖出了药圃底下的石渠，渠壁刻着七户守泉人的姓氏。',
+    text:'{name}在药田边挖出一段旧石渠，里面还埋着几株石根草。渠壁刻着七户守泉人的姓氏。',
     choices:[
       {label:'清渠引水',delta:{food:-2,herbs:3},result:'水流恢复后，{name}采收了几株原先快枯死的药苗。'},
       {label:'拓下渠壁刻字',delta:{xp:2},result:'{name}顺着刻痕认出水路，领悟了几分顺势行气的道理。'}
@@ -282,10 +282,10 @@ const events={
   },
   peddler:{
     title:'山门换药',
-    text:'石桥镇的药贩在门口等{name}，愿意用口粮和灵石换两份鲜药。',
+    text:'石桥镇的药贩在门口等{name}，愿意用口粮和灵石换 2 株青叶草。',
     choices:[
-      {label:'与药贩交易',delta:{herbs:-2,food:3,stone:1},result:'药贩带走鲜药，临走留下下次来山的日期。'},
-      {label:'留药自用',delta:{herbs:1},result:'{name}婉拒药贩，在收拾药筐时多留了一株能用的药苗。'}
+      {label:'与药贩交易',delta:{greenLeaf:-2,food:3,stone:1},result:'药贩带走鲜药，临走留下下次来山的日期。'},
+      {label:'留下草药',delta:{},result:'{name}婉拒药贩，把药草留给丹房。'}
     ]
   },
   guest:{
@@ -1432,7 +1432,7 @@ const revised = {
     {label:'读懂批注',requirements:[[1,6]],delta:{xp:2},result:'{name}读懂了「收半息」的用意。'},
     {label:'收录批注',delta:{},flag:'notes',archive:'《吐纳批注》',result:'批注已收进宗门典籍。'}]},
   ditch:{choices:[
-    {label:'清渠救苗',delta:{herbs:3},result:'清理淤泥后，{name}救回了三份药苗。'},
+    {label:'清渠救苗',delta:{stoneRoot:3},result:'{name}疏开淤泥，收回 3 株石根草。'},
     {label:'拓下渠壁姓氏',delta:{},flag:'rubbing',archive:'旧渠拓片',result:'拓片上记着七户守泉人的姓氏。'}]},
   boundary:{choices:[
     {label:'收好灵石碎片',delta:{stone:2},result:'{name}带回了灵石碎片。'},
@@ -1443,7 +1443,7 @@ const revised = {
   well:{title:'石桥镇来客',text:'第一次筑基引动了山下残阵。守泉人提着一只空桶，来问青云宗何时履行借泉旧契。',choices:[
     {label:'接下枯井调查',delta:{},flag:'wellRead',result:'可以分别派人查井和调查无灯荒庙。'}]},
   beast:{title:'岩背獾守药',text:'妖兽在凝露草旁巡回，每第三轮会蓄力重击。观察巡路，或回主页面配置小队。',choices:[
-    {label:'观察巡路后绕行',requirements:[[4,6]],delta:{},special:'bypass',result:'{name}看清了岩背獾的巡路，队伍顺利带回凝露草种。'},
+    {label:'观察巡路后绕行',requirements:[[4,6]],delta:{dewSeed:1},special:'bypass',result:'{name}看清了岩背獾的巡路，队伍顺利带回凝露草种。'},
     {label:'撤回山门',delta:{},special:'retreat',result:'已记下妖兽的位置，可以另派一人巡查獾道。'}]},
   gateWolf:{title:'山门外的灰狼',text:'值守队发现灰狼靠近山门。可以布阵驱离，也可以关门等待它离开。',choices:[
     {label:'关闭山门，等待灰狼离开',delta:{},result:'值守队关闭山门，灰狼自行离去。'}]},
@@ -1503,7 +1503,6 @@ function resolve(s,token,n,i){
     if(e.ambush&&choice.special==='continue')resumeAmbushedJob(s,job);
     else finishJob(s,job);
     if(e.id==='ford')s.stock.herbs+=2;
-    if(choice.special==='bypass')s.stock.dewSeed++;
     if(choice.special==='retreat')mark(s,'trailOpen');
   }
   s.eventQueue=s.eventQueue.filter(a=>a.token!==token);
