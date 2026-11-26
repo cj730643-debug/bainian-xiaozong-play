@@ -2677,6 +2677,13 @@ function assignmentPanel(indoor=false){
     return html+'<p class="muted">'+(empty[selectedBuilding]??'当前没有新的操作。')+'</p></div>'+townServices;
   }
   const [type,arg='']=assignment.task.split('.');
+  const runningJobs=state.jobs.filter(job=>job.type===type&&(job.arg??'')===arg);
+  const taskTabs=choices.length>1?'<div class="task-picks">'+choices.map(id=>btn(taskLabel(id),'task','data-value="'+id+'" aria-pressed="'+(id===assignment.task)+'"')).join('')+'</div>':'';
+  if(runningJobs.length){
+    return html+taskTabs+runningJobs.map(job=>'<section class="job-summary job-running"><h3>'+esc(taskLabel(assignment.task))+' · 执行中</h3><p>'
+      +job.people.map(i=>esc(state.people[i].name)).join('、')+'</p><p>'
+      +(job.end===null?'等待处理':'剩余 '+clock(job.end))+'</p></section>').join('')+'</div>'+townServices;
+  }
   if(!selectedPersonExplicitly){
     const eligible=state.people.findIndex((_,i)=>!jobSpec(state,type,[i],arg,0,indoor?indoorSelection:undefined).reason);
     const idle=state.people.findIndex((_,i)=>free(state,i));
@@ -2697,7 +2704,7 @@ function assignmentPanel(indoor=false){
   const cost=spec.cost??work?.[2]??({brew:{main:1,aux:1,herbs:3},heal:{herbs:productionRecipes.heal.herbs},qi:{herbs:productionRecipes.qi.herbs}})[type];
   const summary='<section class="job-summary"><h3>'+esc(workName)+'</h3>'
     +(work?'<p>完工后 · '+esc(work[3])+'</p>':type==='watch'?'<p>'+(state.seasonClaims.gateWatch===year(state)?'本年已完成':'每年一次 · 胜利可得 2 灵石')+'</p>':type==='farm'?'<p>每轮收获 3 口粮及药材</p>':['brew','heal','qi'].includes(type)?'<p>完工产出 · 1 '+resources[type==='brew'?'pill':type]+'</p>':'')+'</section>';
-  return html+(choices.length>1?'<div class="task-picks">'+choices.map(id=>btn(taskLabel(id),'task','data-value="'+id+'" aria-pressed="'+(id===assignment.task)+'"')).join('')+'</div>':'')
+  return html+taskTabs
     +summary+materialCards(cost,spec.useReserve??(type==='brew'||type==='break'))+(selectedBuilding==='town'?'<p class="muted">执行者 · '+esc(state.people[state.townVisit?.person]?.name??'等待抵达')+'</p>':'<b class="job-label">'+(work?'施工弟子':type==='watch'?'值守弟子':team?'出行队伍':'执行弟子')+'</b>'+dispatchPicker(team,false,lesson?null:command))+(selectedBuilding!=='town'&&team&&assignment.partner.length?'<div class="actions">'+assignment.partner.map(i=>btn('由'+state.people[i].name+'领队','pick-leader','data-i="'+i+'"',free(state,i)?'':'弟子正忙')).join('')+'</div>':'')+'<div class="form-grid">'
     +(lesson?'<label>后辈<select data-lesson>'+option('','请选择',!assignment.partner.length)+state.people.map((p,i)=>
       String(i)===assignment.leader?'':option(i,p.name,i===assignment.partner[0])).join('')+'</select></label>':'')
