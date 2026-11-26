@@ -174,6 +174,7 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
 .job-summary h3,.job-summary p{margin:0}.job-materials{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,90px),1fr));gap:8px;margin:8px 0 14px}
 .job-material{display:grid;justify-items:center;align-content:start;gap:2px;padding:8px;border:1px solid #a5b49f;border-radius:8px;background:#f7f5ec}.job-material b{font-size:22px}.job-material.short{border-color:#ac5e55;background:#f8ede6}.job-material.short small:last-child{color:#8e3d34}
 .job-label{display:block;margin:10px 0 5px;font-weight:700}.job-time{font-variant-numeric:tabular-nums;color:#314f3d;font-weight:700}.job-running{padding:12px 16px}#indoor-window.compact-job{width:min(660px,calc(100% - 24px))}#indoor-window .project-form{border-top:0;padding-top:0;margin-top:0}
+.farm-count{color:var(--muted);text-align:right;margin:0 0 10px}.farm-layout{display:grid;grid-template-columns:1.25fr 1fr;gap:18px}.farm-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-content:start}.farm-tile{min-height:96px}.farm-tile strong{font-size:1.05em}.farm-tile.locked{border-style:dashed;background:#eeeae0}.farm-tile[aria-pressed=true],.farm-picks button[aria-pressed=true],.farm-details .actions button[aria-pressed=true]{outline:2px solid #42614a;background:#e1e9d8}.farm-details{border-left:1px solid var(--line);padding-left:16px;min-width:0}.farm-details h3{margin-top:0}.farm-picks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:6px 0 12px;max-height:245px;overflow:auto;padding:3px}.farm-picks button{overflow-wrap:anywhere}.farm-yield{margin:0 0 14px}.farm-yield div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}.farm-yield dd{margin:0;font-weight:700}@media(max-width:660px){.farm-layout{grid-template-columns:1fr}.farm-details{border-left:0;padding-left:0}}
 </style>
 
 <dialog id="recruit-event" class="town-window" aria-label="招徒名册"></dialog>
@@ -189,7 +190,7 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
   <p class="guide-intro">第一次接印，可以先安排两件差事，边等结算边熟悉山门。下面的条目可以随时回来查。</p>
   <details open><summary>先让宗门运转</summary><ol><li>打开「山门内」，选中仓库再点「进入」，查看开局建材。</li><li>选一处废墟进入，派空闲弟子清理。完工后再进入，选择修缮。</li><li>正式设施完工后可使用对应功能。修静室前，可以安排一人在大厅临时打坐。</li></ol></details>
   <details><summary>地图与出行</summary><p>打开「地图」，点击文字格子查看地点。选择差事后，点弟子方格组队，出发前看看口粮和预计用时。头像沿虚线移动。去石桥镇要先派人前往，抵达后由在镇的弟子操作坊市和访徒。</p><p>缺木材或石料时，先去地图上的松林或青石坡勘查，再安排采集。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="map">打开地图</button></div></details>
-  <details><summary>修行、功法与筑基</summary><ol><li>在静室修到炼气圆满（修为 100）。在「功法」页选修习者，按灵根和境界学习。已学内容在「人物 → 已学功法」，悬停功法名可看效果。</li><li>药圃每照料 3 轮收 1 份筑基主药。辅药去青崖后山找，队里有神识至少 6 的人可在岩背獾事件中选绕行，也可布阵迎战。</li><li>让掌门在丹房消耗主药、辅药各 1 份及普通药材 3 份炼丹，再让任意炼气圆满的成员去静室冲关。</li></ol><div class="actions"><button type="button" data-kind="guide-go" data-value="manuals">查看宗门功法</button><button type="button" data-kind="guide-go" data-value="dispatch" data-site="furnace" data-task="brew">前往丹房</button></div></details>
+  <details><summary>修行、功法与筑基</summary><ol><li>在静室修到炼气圆满（修为 100）。在「功法」页选修习者，按灵根和境界学习。已学内容在「人物 → 已学功法」，悬停功法名可看效果。</li><li>青叶草种开局可得，石根草种从后山采药取得，凝露草种由岩背獾守护。</li><li>让掌门在丹房消耗青叶草 3 株、石根草 2 株、凝露草 1 株炼丹，再让任意炼气圆满的成员去静室冲关。</li></ol><div class="actions"><button type="button" data-kind="guide-go" data-value="manuals">查看宗门功法</button><button type="button" data-kind="guide-go" data-value="dispatch" data-site="furnace" data-task="brew">前往丹房</button></div></details>
   <details><summary>设置作息与休息</summary><p>进「作息」，选弟子，再选种药、修行或休息等活动，点击小时格安排。可以先用「日常模板」再改几个时段。现实 30 秒等于游戏 1 小时，安排每天重复。</p><p>给弟子留出休息时间。自由时段由弟子根据状态行动，疲劳过高会优先休息。要手动派人时，先看人物状态和按钮旁的原因。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="schedule">设置作息</button></div></details>
   <details><summary>收徒与拜师</summary><p><strong>招募新弟子</strong>　先在山门厢房增建一处厢房，再把石桥镇声望升到 1（例如完成护送商队）。派人到镇上，点「年度招徒 → 开始访徒」。3 分钟后在弹窗挑人，每人需要 3 口粮和一张空床。开局每年可收 1 人，名册全年有效。</p><p><strong>安排师承</strong>　宗门有人筑基后，打开「人物」，选炼气弟子，进「差事与师承」拜师。双方空闲时可以请教功法或学习师父精通的差事。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="dispatch" data-site="gate" data-task="repair.room">前往山门厢房</button><button type="button" data-kind="guide-go" data-value="people">查看人物</button></div></details>
   <details><summary>战斗、仓库与小窗</summary><p>遇战斗先到「事件与战斗」查看小队。前卫优先扛伤，后援输出或施法。战斗按有效身法自动行动，首次遇敌可用神识探查。战后受伤的弟子需要休养。</p><p>「宗门仓库」可看资源、账房和预留备料。页首可以开启画中画，方便边做别的事边看差事和待办。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="dispatch" data-site="store" data-enter="true">查看宗门仓库</button></div></details>
@@ -347,7 +348,10 @@ const nextSeasonTime=s=>s.time+seasonLength-calendarTime(s)%seasonLength;
 const offlineCap = 240 * minute;
 const attributes = ['根骨','悟性','体魄','身法','神识'];
 const seasons = ['春','夏','秋','冬'];
-const resources = {food:'口粮',herbs:'普通药材',stone:'灵石',main:'筑基主药',aux:'筑基辅药',pill:'筑基丹',heal:'疗伤丹',qi:'聚气丹',wood:'木材',masonry:'石料',starOre:'碎星矿石'};
+const crops={grainSeed:['谷物','谷种','food',6,1],leafSeed:['青叶草','青叶草种','greenLeaf',4,1],rootSeed:['石根草','石根草种','stoneRoot',3,1],dewSeed:['凝露草','凝露草种','dewGrass',2,2]};
+const seeds=Object.keys(crops), herbsForPill=['greenLeaf','stoneRoot','dewGrass'];
+const foundationRecipe={greenLeaf:3,stoneRoot:2,dewGrass:1};
+const resources = {food:'口粮',herbs:'普通药材',stone:'灵石',greenLeaf:'青叶草',stoneRoot:'石根草',dewGrass:'凝露草',...Object.fromEntries(seeds.map(id=>[id,crops[id][1]])),pill:'筑基丹',heal:'疗伤丹',qi:'聚气丹',wood:'木材',masonry:'石料',starOre:'碎星矿石'};
 const arts = {guard:'护身诀',stone:'飞石术',vine:'缠藤术',stream:'引流护行',pierce:'破甲剑',recover:'回息术',burn:'燃火术'};
 const elements=['金','木','水','火','土'];
 const manuals={
@@ -440,7 +444,7 @@ const tasks = {
   escort:['护送商队',3],hunt:['清剿白尾山猿',3],caravan:['长途商队护送',5],
   survey:['勘查',2],develop:['整修',3],harvest:['采集',3],
   manual:['学习功法',1],meditate:['静修',1],learn:['学飞石术',1],farm:['照料药圃',2],
-  hill:['后山采药',3],seek:['寻筑基辅药',3],patrol:['后山巡山',3],rain:['雨季巡山',3],
+  hill:['后山采药',3],seek:['寻凝露草种',3],patrol:['后山巡山',3],rain:['雨季巡山',3],
   ape:['驱离山猿',3],trail:['巡查獾道',3],outer:['查荒庙外围',2],town:['石桥镇查井',2],temple:['无灯荒庙下井',3],
   brew:['炼筑基丹',2],break:['筑基冲关',1],restore:['借泉复阵',2],seal:['封住残阵',2],
   ditch:['清理旧渠',2],canal:['沿渠采药',3],repair:['主持修缮',3],returnRoad:['返回山门',0],visitTown:['前往石桥镇',1],recruit:['赴石桥镇访徒',3],
@@ -478,9 +482,9 @@ const duties={
   heal:['丹房执事','heal','按丹房库存目标补丹'],
   patrol:['巡山队长','patrol','空闲时巡山，每趟消耗 2 口粮']
 };
-const itemValues={food:0.125,herbs:0.25,stone:1,main:3,aux:3,pill:8,heal:0.75,qi:1,wood:0.2,masonry:0.25,starOre:0.5,
+const itemValues={food:0.125,herbs:0.25,stone:1,greenLeaf:0.5,stoneRoot:0.75,dewGrass:1.5,grainSeed:0.5,leafSeed:0.5,rootSeed:1,dewSeed:2,pill:8,heal:0.75,qi:1,wood:0.2,masonry:0.25,starOre:0.5,
   woodSword:0.5,bow:2,iron:4,heart:3,jade:4,starSword:5,starArmor:6};
-const itemWeights={food:5,herbs:2,stone:1,main:2,aux:2,pill:1,heal:1,qi:1,wood:20,masonry:30,starOre:15,
+const itemWeights={food:5,herbs:2,stone:1,greenLeaf:2,stoneRoot:2,dewGrass:2,grainSeed:1,leafSeed:1,rootSeed:1,dewSeed:1,pill:1,heal:1,qi:1,wood:20,masonry:30,starOre:15,
   woodSword:10,bow:20,iron:30,heart:1,jade:1,starSword:40,starArmor:50};
 const commodityName=id=>resources[id]??(id==='woodSword'?'青云木剑':gearNames[id]);
 const archiveValue=label=>label.includes('契')?3:/引泉|残卷/.test(label)?8:/《/.test(label)?4:1;
@@ -517,6 +521,8 @@ function caravanLoad(s,ids,cargo){
   return {bags,weight,limit};
 }
 const marketOffers={
+  grainSeedBuy:{label:'买入谷种',cost:{stone:1},reward:{grainSeed:2},quota:3},
+  leafSeedBuy:{label:'买入青叶草种',cost:{stone:1},reward:{leafSeed:2},quota:3},
   ore:{label:'出售碎星矿石',cost:{starOre:4},reward:{stone:2},quota:3},
   oreBuy:{label:'买入碎星矿石',cost:{stone:3},reward:{starOre:4},quota:1},
   grainSale:{label:'出售口粮',cost:{food:10},reward:{stone:1},quota:1},
@@ -555,7 +561,7 @@ const he = () => makePerson('阿禾','木灵根',[4,5,4,6,5,5],15,19);
 const man = () => makePerson('陆小满','土灵根',[4,4,7,6,4,3]);
 function fresh(wall){
   return {version:saveVersion,revision:0,wall,time:0,created:false,people:[shen(),he()],leader:null,
-    stock:{wood:6,masonry:4,starOre:0,food:12,herbs:3,stone:1,main:0,aux:0,pill:0,heal:0,qi:0},reserve:{},
+    stock:{wood:6,masonry:4,starOre:0,food:12,herbs:3,stone:1,greenLeaf:0,stoneRoot:0,dewGrass:0,grainSeed:2,leafSeed:1,rootSeed:0,dewSeed:0,pill:0,heal:0,qi:0},reserve:{},
     jobs:[],serial:0,eventQueue:[],seenEvents:[],journal:[],archive:[starterManual,'借泉契',...Object.values(manuals).map(m=>m.name)],
     farmRounds:0,studyRounds:0,flags:{},built:{},route:'',uses:0,ditch:0,
     gear:{bow:0,iron:0,heart:0,jade:0,starSword:0,starArmor:0},seasonClaims:{},legacy:false};
@@ -570,9 +576,59 @@ const year = s => Math.floor(calendarTime(s)/yearLength)+1;
 const season = s => Math.floor(calendarTime(s)/seasonLength)%4;
 const capacity = s => 4+2*(Number(s.built.room)||0);
 const studyCapacity = s => s.built.study||0;
-const farmCapacity=s=>s.built.farm?1+(s.built.plots??0):0;
+const fieldOrder=[0,1,3,4,2,5,6,7,8];
+const farmCapacity=s=>s.built.clearFarm?Math.min(9,4+(s.built.plots??0)):0;
+const fieldAt=(s,i)=>s.fields?.[i]??{};
+const openField=(s,i)=>fieldOrder.slice(0,farmCapacity(s)).includes(i);
+const fieldJob=(s,i)=>s.jobs.find(j=>j.field===i&&j.fieldAction);
+function fieldSpec(s,i,actor,action,seed){
+  if(!s.created||!fieldOrder.includes(i)||fieldJob(s,i))return {reason:'田块不可用'};
+  const p=s.people[actor];
+  if(!p||!free(s,actor)||jobFor(s,actor)?.route||(s.townVisit?.people??[s.townVisit?.person]).includes(actor))return {reason:'弟子暂不可派'};
+  const plot=fieldAt(s,i);
+  let cost={}, duration=0.5;
+  if(action==='open'){
+    if(!farmCapacity(s)||i!==fieldOrder[farmCapacity(s)]||s.jobs.some(j=>j.fieldAction==='open'||j.type==='repair'&&j.arg==='plots'))return {reason:'请先开垦相邻田块'};
+    [,duration,cost]=repairs.plots;
+  }else if(!openField(s,i))return {reason:'尚未开垦'};
+  else if(action==='sow'){
+    if(plot.ready!==undefined||!own(crops,seed))return {reason:'请选择空田和种子'};
+    cost={[seed]:1};
+  }else if(action!=='reap'||plot.ready===undefined||plot.ready>s.time)return {reason:'尚未成熟'};
+  const skill=action==='open'?'building':'farming';
+  return {cost,skill,ms:Math.round(skilledMinutes(duration,p,skill)*minute*(p.hungry?1.25:1)),reason:missing(s,cost)};
+}
+function startField(s,i,actor,action,seed){
+  const spec=fieldSpec(s,i,actor,action,seed);
+  if(spec.reason)return spec.reason;
+  spend(s,spec.cost);
+  s.jobs=s.jobs.filter(j=>!j.leisure||!j.people.includes(actor));
+  s.jobs.push({id:++s.serial,type:'farm',site:'farm',field:i,fieldAction:action,seed,people:[actor],started:s.time,end:s.time+spec.ms});
+}
+function cropYield(s,plot,p){
+  const [,,item,base]=crops[plot.seed];
+  const bonus=(item==='food'&&season(s)===2?1:0)+(p?tradeLevel(tradeCount(p,'farming'))+(item!=='food'&&p.name==='阿禾'?1:0):0);
+  const keep=plot.keep!==false;
+  return {[item]:Math.max(1,base+bonus-(keep?(item==='food'?2:1):0)),...(keep?{[plot.seed]:1}:{})};
+}
+function completeField(s,j,p){
+  if(j.fieldAction==='open'){
+    s.built.plots=(s.built.plots??0)+1;
+    practiceTrade(s,p,'building');return;
+  }
+  const plot=fieldAt(s,j.field);
+  s.fields??={};
+  if(j.fieldAction==='sow')s.fields[j.field]={...plot,seed:j.seed,ready:s.time+crops[j.seed][4]*dayLength,sower:p.name};
+  else{
+    creditCargo(s,cropYield(s,plot,p));delete plot.ready;delete plot.sower;
+    s.farmRounds++;
+    if(s.farmRounds>=2)queue(s,'ditch',j.people);
+    if(s.farmRounds>=4)queue(s,'moss',j.people);
+    if(s.farmRounds>=6)queue(s,'peddler',j.people);
+  }
+  practiceTrade(s,p,'farming');
+}
 const furnaceCapacity=s=>s.built.furnace||0;
-const farmOccupied=s=>s.jobs.filter(j=>j.type==='farm').length;
 const productionRecipes={heal:{target:4,herbs:2},qi:{target:0,herbs:3}};
 const furnaceOccupied=s=>s.jobs.filter(j=>j.type==='brew'||own(productionRecipes,j.type)).length;
 const productionTarget=(s,id)=>s.productionTargets?.[id]??productionRecipes[id].target;
@@ -649,8 +705,8 @@ function advanceFatigue(s,time){
   return changed;
 }
 const free = (s,i) => !!s.people[i]&&(!jobFor(s,i)||jobFor(s,i).leisure)&&s.people[i].rest<=s.time&&!restingForFatigue(s,s.people[i]);
-const seasonalFood=s=>s.people.length*2;
-const foodFloor=s=>s.foodFloor??seasonalFood(s);
+const dailyFood=s=>s.people.length;
+const foodFloor=s=>s.foodFloor??dailyFood(s);
 const available = (s,id) => Math.max(0,s.stock[id]-(id==='food'?foodFloor(s):s.reserve[id]||0));
 const supplyTerms={cost:{herbs:8},stones:3,reputation:1,seasons:2};
 function settleSupply(s){
@@ -755,22 +811,33 @@ function advanceClock(s,time){
   trackWeekRanks(s);
   trackWeekWaits(s,time);
   const before=Math.floor(calendarTime(s)/seasonLength);
+  const dawn=6*scheduleHour;
+  const meals=Math.floor((time-dawn)/dayLength)-Math.floor((s.time-dawn)/dayLength);
   const changed=advanceFatigue(s,time);
+  for(let n=0;n<meals;n++)settleDailyFood(s);
   const after=Math.floor(calendarTime(s)/seasonLength);
-  if(before===after)return changed;
+  if(before===after)return changed||meals>0;
   settleSupply(s);
   if(Math.floor(before/4)!==Math.floor(after/4))annualRecruit(s);
-  const due=seasonalFood(s);
-  const paid=Math.min(s.stock.food,due);
-  s.stock.food-=paid;
-  s.lastFoodBill={paid,due};
   const {week,food,breakthroughs,blocked}=s.weekly.current;
   s.weekly.reports.unshift({...s.weekly.current,week,foodDelta:s.stock.food-food,breakthroughs,blocked,oreEnd:s.stock.starOre??0});
   s.weekly.reports.length=Math.min(4,s.weekly.reports.length);
   s.weekly.current=null;
   beginWeek(s);
-  log(s,seasons[season(s)]+'季账房 · 支出口粮 '+paid+'/'+due+(paid<due?'，缺 '+(due-paid)+'。':'。'));
   return true;
+}
+function settleDailyFood(s){
+  let paid=0;
+  s.people.forEach((p,i)=>{
+    const job=jobFor(s,i), visit=s.townVisit;
+    const provisions=(visit?.people??[visit?.person]).includes(i)?visit.cargo
+      :job?.route?.go?job.cargo??job.provisions??job.returnCargo:s.stock;
+    const fed=(provisions?.food??0)>0;
+    if(fed){provisions.food--;paid++;}
+    p.hungry=!fed;
+  });
+  s.lastFoodBill={paid,due:dailyFood(s)};
+  if(paid<dailyFood(s))log(s,'今日有 '+(dailyFood(s)-paid)+' 人缺粮。');
 }
 function costText(cost){
   return Object.entries(cost).filter(([,amount])=>amount).map(([id,amount])=>amount+' '+resources[id]).join('、');
@@ -938,11 +1005,11 @@ function jobSpec(s,type,ids,arg='',pack=0,site){
       label='学习'+manual.name;break;
     }
     case 'meditate': if(!p.rank&&p.xp>=100)return fail('已圆满，请准备筑基丹。');break;
-    case 'farm': if(farmOccupied(s)>=farmCapacity(s))return fail('药圃种药位已满。');break;
+    case 'farm': return fail('请从药田选择田块。');
     case 'learn': if(p.known.includes('stone'))return fail('已学会飞石术。');break;
     case 'vine': if(!s.flags.vine||p.known.includes('vine'))return fail('需要缠藤术残页，且修士尚未学会。');break;
     case 'read': if(!s.flags.temple||!p.rank||own(p.mastery,streamManual))return fail('需要荒庙残卷及尚未参悟的筑基修士。');break;
-    case 'seek': if(current('seek'))return fail('已有队伍在寻辅药。');break;
+    case 'seek': if(current('seek'))return fail('已有队伍在寻凝露草种。');break;
     case 'trail': if(!s.flags.trailOpen||s.flags.trail||current('trail'))return fail('须先从岩背獾处败退或撤回。');break;
     case 'ape': if(!s.flags.vine||current('ape'))return fail('完成后山巡山后开放，且只可派一队。');break;
     case 'rain': if(season(s)!==1)return fail('雨季巡山只在夏季接取。');break;
@@ -956,7 +1023,7 @@ function jobSpec(s,type,ids,arg='',pack=0,site){
     case 'brew':
       if(furnaceOccupied(s)>=furnaceCapacity(s))return fail('丹炉已满。');
       if(leader!==s.leader)return fail('筑基丹需由掌门主持。');
-      cost={main:1,aux:1,herbs:3};useReserve=true;break;
+      cost=foundationRecipe;useReserve=true;break;
     case 'break':
       if(p.rank||p.xp<100)return fail('冲关需要炼气圆满。');
       cost={pill:1};useReserve=true;break;
@@ -983,7 +1050,7 @@ function jobSpec(s,type,ids,arg='',pack=0,site){
       if(s.jobs.some(j=>j.type==='repair'&&j.arg===arg))return fail('已有同类工程在施工。');
       if(arg==='farm'&&s.built.farm)return fail('药圃已经修好。');
       if(arg==='workshop'&&s.built.workshop)return fail('炼器工坊已建成。');
-      if(arg==='plots'&&!s.built.farm)return fail('先修缮现有药圃。');
+      if(['plots','farm'].includes(arg))return fail('请从药田选择田块。');
       const [name,minutes,materials]=repairs[arg];
       label=name;duration=minutes;cost=materials;break;
     }
@@ -1013,6 +1080,7 @@ function jobSpec(s,type,ids,arg='',pack=0,site){
     duration=Math.max(1/60,Math.round(duration*60/(learningRate(learner)*talentFactor(learner,'memory')))/60);
   }
   const shortage=missing(s,cost,useReserve);
+  if(p.hungry)duration*=1.25;
   const route=travelPlan(s,type,ids,arg,duration*minute);
   return {label,duration,cost,useReserve,arg,route,hallMeditation,reason:shortage};
 }
@@ -1040,6 +1108,7 @@ function start(s,type,ids,arg='',pack=0,repeat=false,policy,site){
   s.jobs.push({id:++s.serial,type,people:ids,started:s.time,townOrigin:ids.includes(departingTown)?departingTown:null,qiBonus:takeQi(s,s.people[ids[0]],type),arg:spec.arg,pack,route:spec.route,end:s.time+(spec.route?.total??spec.duration*minute),
     repeat:repeat&&['meditate','farm'].includes(type)});
   const job=s.jobs.at(-1);
+  if(spec.route?.go&&spec.cost.food)job.provisions={food:spec.cost.food};
   if(spec.hallMeditation)job.hallMeditation=true;
   if(type==='repair'&&site)job.site=site;
   if(type==='harvest'&&arg==='mist5')job.starOreHarvest=true;
@@ -1056,8 +1125,11 @@ function creditCargo(s,cargo){
 function finishJob(s,j){
   s.jobs=s.jobs.filter(a=>a.id!==j.id);
   s.stock.heal+=j.pack||0;
-  if(j.end===null&&j.route?.back)beginReturn(s,j.people,j.route,j.returnCargo);
-  else creditCargo(s,j.returnCargo);
+  if(j.type==='visitTown')return;
+  const cargo={...j.returnCargo};
+  if(j.provisions?.food)cargo.food=(cargo.food??0)+j.provisions.food;
+  if(j.end===null&&j.route?.back)beginReturn(s,j.people,j.route,cargo);
+  else creditCargo(s,cargo);
 }
 function rewardTownJob(s,type){
   const offer=townJobs[type];
@@ -1127,17 +1199,9 @@ function complete(s,j){
       if(s.studyRounds>=5&&!p.rank)queue(s,'pulse',j.people);
       break;
     }
-    case 'farm':
-      s.farmRounds++;s.stock.food+=3;
-      s.stock.herbs+=herbYield(s,p);
-      if(s.flags.seed>0&&!--s.flags.seed)log(s,'春种收成，额外入仓 4 普通药材。');
-      if(s.farmRounds%3===0){s.stock.main++;log(s,'筑基主药成熟，已入仓。');}
-      if(s.farmRounds>=2)queue(s,'ditch',j.people);
-      if(s.farmRounds>=4)queue(s,'moss',j.people);
-      if(s.farmRounds>=6)queue(s,'peddler',j.people);
-      break;
-    case 'hill':s.stock.herbs+=2;addXp(p,2);queue(s,'guest',j.people);break;
-    case 'seek':s.stock.aux++;log(s,'队伍沿已知獾道绕行，带回筑基辅药。');break;
+    case 'farm': if(j.fieldAction)completeField(s,j,p);return;
+    case 'hill':s.stock.herbs+=2;s.stock.rootSeed++;addXp(p,2);queue(s,'guest',j.people);break;
+    case 'seek':s.stock.dewSeed++;log(s,'队伍沿已知獾道绕行，带回凝露草种。');break;
     case 'trail':mark(s,'trail','岩背獾巡路图');break;
     case 'outer':mark(s,'outer','荒庙外围勘图');queue(s,'lantern',j.people);break;
     case 'patrol':mark(s,'vine','缠藤术残页');queue(s,'boundary',j.people);break;
@@ -1252,6 +1316,13 @@ function workAttempt(s,i,mode){
   const p=s.people[i];
   const blocked=reason=>({reason});
   if(!visibleDuty(s,mode))return blocked('请先勘查采集地点');
+  if(mode==='farm'){
+    for(const action of ['reap','sow'])for(const field of fieldOrder){
+      const seed=fieldAt(s,field).seed;
+      if(seed&&!fieldSpec(s,field,i,action,seed).reason)return {field,action,seed};
+    }
+    return blocked('药田暂无可播种或采收的田块');
+  }
   if(mode==='smith'){
     if(!s.built.workshop)return blocked('炼器工坊尚未建成');
     const needs=(s.forgeOrders??[]).filter(order=>!order.paused&&orderNeedsWork(s,order));
@@ -1301,6 +1372,7 @@ function assignDuties(s){
     let firstReason='';
     for(const work of choices){
       const plan=workAttempt(s,i,work);
+      if(plan.action){if(!startField(s,plan.field,i,plan.action,plan.seed)){changed=true;break;}continue;}
       if(plan.reason||!plan.task){firstReason||=plan.reason;continue;}
       if(start(s,plan.task,[i],plan.arg??''))continue;
       const job=jobFor(s,i);
@@ -1328,9 +1400,10 @@ function tick(s,wall){
     const rested=s.people.reduce((earliest,p,i)=>!jobFor(s,i)&&restingForFatigue(s,p)
       ?Math.min(earliest,fatigueRecovery(s,p)):earliest,Infinity);
     const ambush=s.jobs.filter(j=>j.ambushAt!==undefined&&j.ambushAt<=end).sort((a,b)=>a.ambushAt-b.ambushAt||a.id-b.id)[0];
-    const checkpoint=Math.min(recovery,hourBoundary,rested,ambush?.ambushAt??Infinity);
+    const maturity=Math.min(...Object.values(s.fields??{}).map(p=>p.ready>s.time?p.ready:Infinity));
+    const checkpoint=Math.min(recovery,hourBoundary,rested,ambush?.ambushAt??Infinity,maturity);
     if(checkpoint<=end&&checkpoint<(j?.end??Infinity)&&checkpoint<(s.battle?.end??Infinity)){
-      changed=advanceClock(s,checkpoint)||changed;
+      changed=advanceClock(s,checkpoint)||changed||checkpoint===maturity;
       if(ambush?.ambushAt===checkpoint){
         const remaining=ambush.end-s.time;
         ambush.ambushPause={remaining,at:s.time};
@@ -1369,8 +1442,8 @@ const revised = {
     {label:'找山脊近路',requirements:[[3,6]],delta:{},flag:'shortcut',archive:'山脊近路图',result:'{name}找到一条避开断桥的近路。'}]},
   well:{title:'石桥镇来客',text:'第一次筑基引动了山下残阵。守泉人提着一只空桶，来问青云宗何时履行借泉旧契。',choices:[
     {label:'接下枯井调查',delta:{},flag:'wellRead',result:'可以分别派人查井和调查无灯荒庙。'}]},
-  beast:{title:'岩背獾守药',text:'妖兽在辅药旁巡回，每第三轮会蓄力重击。观察巡路，或回主页面配置小队。',choices:[
-    {label:'观察巡路后绕行',requirements:[[4,6]],delta:{},special:'bypass',result:'{name}看清了岩背獾的巡路，队伍顺利带回辅药。'},
+  beast:{title:'岩背獾守药',text:'妖兽在凝露草旁巡回，每第三轮会蓄力重击。观察巡路，或回主页面配置小队。',choices:[
+    {label:'观察巡路后绕行',requirements:[[4,6]],delta:{},special:'bypass',result:'{name}看清了岩背獾的巡路，队伍顺利带回凝露草种。'},
     {label:'撤回山门',delta:{},special:'retreat',result:'已记下妖兽的位置，可以另派一人巡查獾道。'}]},
   gateWolf:{title:'山门外的灰狼',text:'值守队发现灰狼靠近山门。可以布阵驱离，也可以关门等待它离开。',choices:[
     {label:'关闭山门，等待灰狼离开',delta:{},result:'值守队关闭山门，灰狼自行离去。'}]},
@@ -1430,7 +1503,7 @@ function resolve(s,token,n,i){
     if(e.ambush&&choice.special==='continue')resumeAmbushedJob(s,job);
     else finishJob(s,job);
     if(e.id==='ford')s.stock.herbs+=2;
-    if(choice.special==='bypass')s.stock.aux++;
+    if(choice.special==='bypass')s.stock.dewSeed++;
     if(choice.special==='retreat')mark(s,'trailOpen');
   }
   s.eventQueue=s.eventQueue.filter(a=>a.token!==token);
@@ -1547,7 +1620,7 @@ function battleFinish(s,result){
     if(result==='胜利'){s.stock.herbs++;b.outcome.push('普通药材 +1','队伍继续赶路。');}
     else b.outcome.push('原差事已取消，队伍返回山门。');
   }else if(b.enemyId==='beast'){
-    if(result==='胜利'){s.stock.aux++;b.outcome.push('筑基辅药 +1');}
+    if(result==='胜利'){s.stock.dewSeed++;b.outcome.push('凝露草种 +1');}
     else{mark(s,'trailOpen');b.outcome.push('已解锁「巡查獾道」。');}
   }else if(b.enemyId==='gateWolf'){
     if(result==='胜利'){s.stock.stone+=2;b.outcome.push('灵石 +2');}
@@ -1673,6 +1746,12 @@ function mentorReason(s,student,teacher){
 function dispatch(s,a){
   const p=s.people[a.i];
   switch(a.kind){
+    case 'field-start':return startField(s,a.field,a.i,a.action,a.seed);
+    case 'field-keep':{
+      const plot=fieldAt(s,a.field);
+      if(!openField(s,a.field)||!plot.seed||fieldJob(s,a.field))return '现在无法调整留种。';
+      plot.keep=!!a.keep;return;
+    }
     case 'create':return create(s,a.name,a.stats,a.element);
     case 'start':return start(s,a.task,a.ids,a.arg,a.pack,a.repeat,a.policy,a.site);
     case 'scan-beast':{
@@ -1872,7 +1951,7 @@ function dispatch(s,a){
       if(s.created&&Number.isSafeInteger(a.n)&&a.n>=0){s.foodFloor=a.n;return;}
       return '口粮保底须为非负整数。';
     case 'reserve':
-      if(['herbs','main','aux','pill','starOre'].includes(a.value)&&Number.isInteger(a.n)&&a.n>=0&&a.n<=s.stock[a.value]){s.reserve[a.value]=a.n;return;}
+      if(['herbs',...herbsForPill,'pill','starOre'].includes(a.value)&&Number.isInteger(a.n)&&a.n>=0&&a.n<=s.stock[a.value]){s.reserve[a.value]=a.n;return;}
       break;
     case 'root':
       if(p&&a.i===s.leader&&!p.gift&&elements.includes(a.value)){p.gift=a.value+'灵根';return;}
@@ -1957,6 +2036,18 @@ function apply(current,command,wall){
     return {next,message:'',write:false};
   }
   const next=stored??fresh(wall);
+  if(next.stock.grainSeed===undefined){
+    Object.assign(next.stock,{grainSeed:2,leafSeed:1,rootSeed:0,dewSeed:next.stock.aux?1:0,
+      greenLeaf:(next.stock.main??0)*3,stoneRoot:(next.stock.main??0)*2,dewGrass:next.stock.aux??0});
+    if(next.built.farm)next.built.clearFarm=1;
+    for(const cargo of [next.stock,next.townVisit?.cargo,...next.jobs.flatMap(j=>[j.cargo,j.returnCargo])]){
+      if(!cargo)continue;
+      if(cargo!==next.stock&&cargo.main){cargo.greenLeaf=(cargo.greenLeaf??0)+3*cargo.main;cargo.stoneRoot=(cargo.stoneRoot??0)+2*cargo.main;}
+      if(cargo!==next.stock&&cargo.aux)cargo.dewGrass=(cargo.dewGrass??0)+cargo.aux;
+      delete cargo.main;delete cargo.aux;
+    }
+    delete next.reserve.main;delete next.reserve.aux;
+  }
   if(command?.kind==='restart'&&(!next.created||command.generation!==(next.generation??0)))
     return {next,message:'存档已更新，请重新确认。',write:false};
   if(command?.kind==='restart'){
@@ -2207,10 +2298,10 @@ const buildingActions={
   works:{name:'旧工坊',tasks:['repair.clearWorks','repair.workshop','repair.furnace']},
   west:{name:'西侧山路',tasks:['repair.west']},
   east:{name:'东侧石阶',tasks:['repair.east']},
-  westPlot:{name:'西坡空地',tasks:['repair.room','repair.study','repair.plots']},
+  westPlot:{name:'西坡空地',tasks:['repair.room','repair.study']},
   eastPlot:{name:'东侧空地',tasks:['repair.furnace','repair.workshop']},
   study:{name:'静室',mark:'静',purpose:'修行、术法与冲关',tasks:['repair.clearStudy','meditate','learn','vine','break','repair.study']},
-  farm:{name:'药圃',mark:'药',purpose:'种药与培育主药',tasks:['repair.clearFarm','farm','repair.farm','repair.plots']},
+  farm:{name:'药田',mark:'药',purpose:'播种与采收',tasks:['repair.clearFarm']},
   workshop:{name:'炼器工坊',mark:'器',purpose:'打造武器与护身物',tasks:['repair.workshop',...Object.keys(forgeRecipes).map(id=>'forge.'+id)]},
   furnace:{name:'丹房',mark:'丹',purpose:'炼丹与增建丹炉',tasks:['brew','heal','qi','repair.furnace']},
   library:{name:'藏经处',mark:'经',purpose:'参悟与传授功法',tasks:[...Object.keys(manuals).map(id=>'manual.'+id),'read','teach','winter']},
@@ -2233,8 +2324,8 @@ function indoorVisible(id){
     furnace:!!state.built.furnace,workshop:!!state.built.workshop})[id]??true;
 }
 function indoorName(id){
-  const names={study:'旧静室',farm:'荒药圃',gate:'旧厢房'};
-  const built={study:'study',farm:'farm',gate:'room'};
+  const names={study:'旧静室',farm:'荒药田',gate:'旧厢房'};
+  const built={study:'study',farm:'clearFarm',gate:'room'};
   if(id==='gate'&&state.built.room)return '厢房';
   return id==='exit'?'山门':names[id]&&!state.built[built[id]]?names[id]:buildingActions[id].name;
 }
@@ -2253,7 +2344,7 @@ function indoorStatus(id){
     return state.plotBuildings?.[id]?.map(key=>names[key]).join('、')||'扩建用地';
   }
   if(id==='works')return state.built.clearWorks?'地基已清理':'废墟';
-  const key={study:'study',farm:'farm',gate:'room'}[id];
+  const key={study:'study',farm:'clearFarm',gate:'room'}[id];
   return key&&!state.built[key]?'待修复':'可用';
 }
 function jobSite(j){
@@ -2290,6 +2381,58 @@ function indoorMap(){
 function indoorDetail(){
   return '<div><b>'+indoorName(indoorSelection)+'</b><small>'+indoorStatus(indoorSelection)+'</small></div>'+btn('进入','indoor-enter');
 }
+let selectedField=0, fieldSeed='', fieldActor=null, showAllFieldPeople=false, fieldPersonQuery='';
+function farmMarkup(){
+  const i=selectedField, plot=fieldAt(state,i), active=fieldJob(state,i);
+  const catalog=seeds.filter(id=>available(state,id)>0);
+  if(!catalog.includes(fieldSeed))fieldSeed=catalog.includes(plot.seed)?plot.seed:catalog[0]??'';
+  const action=!openField(state,i)?'open':plot.ready===undefined?'sow':'reap';
+  const labels={open:'开垦',sow:'播种',reap:'采收'};
+  const people=state.people.map((p,index)=>({p,index,spec:fieldSpec(state,i,index,action,fieldSeed)}))
+    .filter(entry=>entry.spec.ms).sort((a,b)=>a.spec.ms-b.spec.ms||a.index-b.index);
+  if(!people.some(e=>e.index===fieldActor))fieldActor=people[0]?.index??null;
+  const picked=people.find(e=>e.index===fieldActor), reason=picked?.spec.reason??'暂无可派弟子';
+  const grid=Array.from({length:9},(_,index)=>{
+    const field=fieldAt(state,index), job=fieldJob(state,index), opened=openField(state,index);
+    const planted=field.ready!==undefined, seed=job?.seed||field.seed;
+    const name=!opened?'未开垦':planted||job?.fieldAction==='sow'?crops[seed][0]:'空田';
+    const status=job?labels[job.fieldAction]+'中':planted?field.ready>state.time?'生长中':'可采收':'可播种';
+    return '<button type="button" class="farm-tile'+(opened?'':' locked')+'" data-kind="field-select" data-n="'+index+'" aria-pressed="'+(index===i)+'"><strong>'+name+'</strong>'
+      +(opened?'<small>'+status+'</small>':'')+(job&&opened?'<small>'+esc(state.people[job.people[0]].name)+'</small>':'')+'</button>';
+  }).join('');
+  let details='';
+  if(active)details='<h3>'+labels[active.fieldAction]+'中</h3><p>'+esc(state.people[active.people[0]].name)+'</p><p>剩余 '+clock(active.end)+'</p>';
+  else{
+    details='<h3>'+(!openField(state,i)?'未开垦':plot.ready===undefined?'空田':crops[plot.seed][0])+'</h3>';
+    if(plot.ready!==undefined){
+      const growing=plot.ready>state.time;
+      details+=(growing?'<p>生长中 · 剩余 '+clock(plot.ready)+'</p>':'<p>可采收</p>')
+        +(plot.sower?'<p>播种人 '+esc(plot.sower)+'</p>':'')
+        +'<b class="job-label">采收方式</b><div class="actions">'
+        +btn('留种','field-keep','data-value="keep" aria-pressed="'+(plot.keep!==false)+'"')
+        +btn('全收','field-keep','data-value="all" aria-pressed="'+(plot.keep===false)+'"')+'</div>'
+        +'<b class="job-label">预计收成</b><dl class="farm-yield">'+Object.entries(cropYield(state,plot,picked?.p)).map(([id,n])=>'<div><dt>'+resources[id]+'</dt><dd>'+n+'</dd></div>').join('')+'</dl>';
+    }
+    if(action==='sow'){
+      details+='<b class="job-label">选择种子</b><div class="farm-picks">'+catalog.map(id=>'<button type="button" data-kind="field-seed" data-value="'+id+'" aria-pressed="'+(fieldSeed===id)+'"><strong>'+resources[id]+'</strong><small>库存 '+available(state,id)+'</small></button>').join('')+'</div>';
+      if(!catalog.length)details+='<p>仓库暂无种子。</p>';
+    }
+    if(action==='open'&&i!==fieldOrder[farmCapacity(state)])details+='<p>请先开垦相邻田块。</p>';
+    else if((action!=='reap'||plot.ready<=state.time)&&(action!=='sow'||catalog.length)){
+      if(action==='open')details+=materialCards(repairs.plots[2]);
+      const visible=showAllFieldPeople?people:people.filter((e,at)=>at<3||e.index===fieldActor);
+      if(showAllFieldPeople&&people.length>3)details+='<label>搜索弟子 <input type="search" data-field-person-search value="'+esc(fieldPersonQuery)+'"></label>';
+      details+='<b class="job-label">'+labels[action]+'弟子</b><div class="farm-picks">'+visible.map(({p,index,spec})=>
+        '<button type="button" data-kind="field-person" data-i="'+index+'"'+(showAllFieldPeople&&!p.name.includes(fieldPersonQuery)?' hidden':'')+' aria-pressed="'+(fieldActor===index)+'"><strong>'+esc(p.name)
+        +'</strong><small>'+ (action==='open'?'建造':'种植')+' · '+tradeRanks[tradeLevel(tradeCount(p,spec.skill))]+'</small><small class="job-time">'+jobTimer(spec.ms)+'</small></button>').join('')+'</div>';
+      if(people.length>3)details+=btn(showAllFieldPeople?'收起名单':'全部可派弟子','field-people');
+      if(!people.length)details+='<p>暂无空闲弟子。</p>';
+      if(picked?.spec.reason)details+='<p>'+esc(reason)+'</p>';
+      details+=btn('开始'+labels[action],'field-start','class="gold" data-value="'+action+'"',reason);
+    }
+  }
+  return '<p class="farm-count">已开垦 '+farmCapacity(state)+' / 9</p><div class="farm-layout"><div class="farm-grid">'+grid+'</div><section class="farm-details">'+details+'</section></div>';
+}
 function refreshIndoor(){
   const dialog=$('indoor-window');
   if(!dialog.open)return;
@@ -2300,9 +2443,10 @@ function refreshIndoor(){
     return;
   }
   const id=indoorSelection, project=indoorProject(id);
-  dialog.classList.toggle('compact-job',!['store','workshop','furnace'].includes(id));
+  dialog.classList.toggle('compact-job',!['store','workshop','furnace','farm'].includes(id));
   $('indoor-title').textContent=indoorName(id);
   $('indoor-content').innerHTML=id==='store'?warehouse():id==='exit'?btn('前往大地图','indoor-exit')+assignmentPanel(true)
+    :id==='farm'&&farmCapacity(state)?farmMarkup()
     :project?'<section class="job-summary job-running"><h3>施工中</h3><p>'+esc(state.people[project.people[0]].name)+' · '+esc(repairs[project.arg][0])+'</p><p>剩余 '+clock(project.end)+'</p></section>'
     :assignmentPanel(true);
 }
@@ -2432,7 +2576,7 @@ function recruitmentMarkup(s){
       +'</section>';
   }
   html+='<p>第 '+plan.year+' 年 · 已收 '+plan.chosen.length+'/'+plan.limit
-    +' · 空床 '+Math.max(0,capacity(s)-s.people.length)+'</p><small>每人安家费 3 口粮，入门后每季多支出 2 口粮。</small>';
+    +' · 空床 '+Math.max(0,capacity(s)-s.people.length)+'</p><small>每人安家费 3 口粮，入门后每日多支出 1 口粮。</small>';
   return html+plan.candidates.map((c,index)=>{
     const accepted=plan.chosen.includes(index),reason=recruitChoiceReason(s,plan,index);
     return '<article class="pending"><div class="row"><b>'+esc(c.name)+'</b><span>'+esc(c.gift)+'</span></div>'
@@ -2657,7 +2801,6 @@ function assignmentPanel(indoor=false){
   const townServices=selectedBuilding==='town'?marketMarkup()+commissionsMarkup():'';
   if(selectedBuilding==='town')html+=recruitmentMarkup(state);
   if(selectedBuilding==='mist5'&&state.flags.explored_mist5)html+='<p>采掘位 '+(state.jobs.some(j=>j.arg==='mist5'&&['harvest','develop'].includes(j.type))?'使用中':'空闲')+' · '+(state.flags.industry_mist5?'已支护 · 可排班':'支护后可排班 · 勘查后可手动试采')+'</p>';
-  if(selectedBuilding==='farm'&&state.built.farm)html+='<p class="muted">种药位 '+farmOccupied(state)+' / '+farmCapacity(state)+'。修缮后可反复扩建。</p>';
   if(selectedBuilding==='furnace'&&state.built.furnace)html+=productionMarkup(state)+'<p class="muted">丹炉使用 '+furnaceOccupied(state)+' / '+furnaceCapacity(state)+'。每增建一座，可同时多炼一炉。</p>';
   if(selectedBuilding==='study'&&state.built.study)html+='<p class="muted">静室使用 '+studyOccupied(state)+' / '+studyCapacity(state)+' 间。每建一间增加 1 个修行席位。</p>';
   if(selectedBuilding==='gate'&&state.built.room)html+='<p class="muted">常住 '+state.people.length+' / '+capacity(state)+' 人</p>';
@@ -2701,7 +2844,7 @@ function assignmentPanel(indoor=false){
   const repeat=['farm','meditate'].includes(command.task);
   const work=type==='repair'?repairs[arg]:type==='fortify'?fortification:null;
   const workName=type==='repair'&&arg==='room'&&!state.built.room&&selectedBuilding==='gate'?'修复厢房':taskLabel(assignment.task);
-  const cost=spec.cost??work?.[2]??({brew:{main:1,aux:1,herbs:3},heal:{herbs:productionRecipes.heal.herbs},qi:{herbs:productionRecipes.qi.herbs}})[type];
+  const cost=spec.cost??work?.[2]??({brew:foundationRecipe,heal:{herbs:productionRecipes.heal.herbs},qi:{herbs:productionRecipes.qi.herbs}})[type];
   const summary='<section class="job-summary"><h3>'+esc(workName)+'</h3>'
     +(work?'<p>完工后 · '+esc(work[3])+'</p>':type==='watch'?'<p>'+(state.seasonClaims.gateWatch===year(state)?'本年已完成':'每年一次 · 胜利可得 2 灵石')+'</p>':type==='farm'?'<p>每轮收获 3 口粮及药材</p>':['brew','heal','qi'].includes(type)?'<p>完工产出 · 1 '+resources[type==='brew'?'pill':type]+'</p>':'')+'</section>';
   return html+taskTabs
@@ -2722,7 +2865,7 @@ function assignmentPanel(indoor=false){
     +btn(workName==='修复厢房'?'开始修复':'开始'+workName,'assign','class="gold"',spec.reason)+'</div></div>'+townServices;
 }
 function actorStatus(p,i){
-  const fatigue=' · 疲劳 <span data-fatigue="'+i+'">'+Math.floor(fatigueOf(p))+'</span>/100';
+  const fatigue=(p.hungry?' · 饥饿':'')+' · 疲劳 <span data-fatigue="'+i+'">'+Math.floor(fatigueOf(p))+'</span>/100';
   return activityStatus(p,i)+(fatigueOf(p)>=60?' · 疲倦':'')+fatigue;
 }
 function activityStatus(p,i){
@@ -3026,20 +3169,20 @@ function waterContract(){
   return html;
 }
 function foodAccounts(s){
-  const due=seasonalFood(s), shortage=Math.max(0,due-s.stock.food), last=s.lastFoodBill;
+  const due=dailyFood(s), shortage=Math.max(0,due-s.stock.food), last=s.lastFoodBill;
   return '<details data-detail="food-accounts" open><summary>宗门账房</summary>'
-    +'<p>库存 '+s.stock.food+' · 下季需 '+due+' · 缺口 '+shortage+' · 可动用 '+available(s,'food')+'</p>'
+    +'<p>库存 '+s.stock.food+' · 每日需粮 '+due+' · 缺口 '+shortage+' · 可动用 '+available(s,'food')+'</p>'
     +'<label>口粮保底 <input type="number" min="0" step="1" value="'+foodFloor(s)+'" data-food-floor></label>'
-    +'<p class="muted">每季每人消耗 2 口粮。坊市卖粮和耗粮差事会留出保底。结算缺粮时先扣现有口粮。</p>'
+    +'<p class="muted">每日 06:00 每人消耗 1 口粮。坊市卖粮和耗粮差事会留出保底。结算缺粮时先扣现有口粮。</p>'
     +(last?'<p>上次结算 '+last.paid+'/'+last.due+' 口粮</p>':'')+'</details>';
 }
-const itemBriefs={food:'供弟子办差和商队赶路。',stone:'坊市货币，也可用于营造和炼器。',herbs:'常见炼丹材料，也可出售。',main:'药圃培育的筑基丹主料。',aux:'后山获取的筑基丹辅料。',pill:'供炼气圆满的弟子冲关。',heal:'战斗中可用于恢复气血。',qi:'静修时服用，提高当轮修为。',wood:'用于建设、矿脉支护和炼器。',masonry:'用于营造、修缮与矿脉支护。',starOre:'可打造碎星剑和碎星护甲，也可运去石桥坊市出售。'};
+const itemBriefs={food:'供弟子办差和商队赶路。',stone:'坊市货币，也可用于营造和炼器。',herbs:'常见炼丹材料，也可出售。',greenLeaf:'筑基丹配方用药。',stoneRoot:'筑基丹配方用药。',dewGrass:'筑基丹配方用药。',pill:'供炼气圆满的弟子冲关。',heal:'战斗中可用于恢复气血。',qi:'静修时服用，提高当轮修为。',wood:'用于建设、矿脉支护和炼器。',masonry:'用于营造、修缮与矿脉支护。',starOre:'可打造碎星剑和碎星护甲，也可运去石桥坊市出售。'};
 const stockHint=(label,brief,value,weight)=>'<button type="button" class="stock-hint" data-stock-hint="'+esc(brief)
   +'" data-stock-value="'+esc(value)+'"'+(weight===undefined?'':' data-stock-weight="'+esc(weight)+'"')+'>'+esc(label)+'</button>';
 function warehouse(){
   const s=state;
   const groups=[
-    ['日常物资','粮',['food','stone']],['药材','药',['herbs','main','aux']],
+    ['日常物资','粮',['food','stone']],['药材','药',['herbs',...herbsForPill]],['种子','种',seeds],
     ['丹药','丹',['pill','heal','qi']],['建筑材料','材',['wood','masonry','starOre']]
   ];
   const cargo=[s.townVisit?.cargo,...s.jobs.map(j=>j.cargo??j.returnCargo)].filter(Boolean);
@@ -3053,7 +3196,7 @@ function warehouse(){
     ).join('')+'</dl></section>'
   ).join('')+'</div>';
   return '<h2>宗门总仓库</h2>'+(s.flags.explored_mist5?workGoalInput(s,'starOre'):'')+stock+'<h3>仓库管理</h3><div class="warehouse-tools">'+foodAccounts(s)+(s.supplyContract?'<details data-detail="supply"><summary>石桥镇供药</summary><p>'+supplyStatus(s)+'</p></details>':'')+'<details data-detail="reserve"><summary>总仓预留物资</summary>'
-    +['main','aux','herbs','pill',...(s.flags.explored_mist5||s.stock.starOre>0?['starOre']:[])].filter(id=>s.stock[id]>0).map(id=>'<div class="row"><label>'+resources[id]+' <input type="number" min="0" max="'+s.stock[id]+'" value="'+(s.reserve[id]||0)+'" data-reserve="'+id+'"></label></div>').join('')
+    +[...herbsForPill,'herbs','pill',...(s.flags.explored_mist5||s.stock.starOre>0?['starOre']:[])].filter(id=>s.stock[id]>0).map(id=>'<div class="row"><label>'+resources[id]+' <input type="number" min="0" max="'+s.stock[id]+'" value="'+(s.reserve[id]||0)+'" data-reserve="'+id+'"></label></div>').join('')
     +'</details><details data-detail="archive"><summary>宗门典籍与契据 · '+s.archive.length+'</summary><p>'+s.archive.map(name=>stockHint(name,'宗门收藏，可用于传承或事件。',archiveValue(name))).join('、')+'</p></details>'
     +'<details data-detail="gear"><summary>器物</summary><p>'+(Object.keys(s.gear).filter(present).map(id=>itemName(id)+' '+s.gear[id]+(inTransit(id)?'（在途 '+inTransit(id)+'）':'')).join(' · ')||'暂无入库或在途器物。')+'</p></details></div>';
 }
@@ -3134,7 +3277,7 @@ function render(){
     root.querySelector('.mini-events').innerHTML=pending?'<section class="event panel"><small>待处理 '+state.eventQueue.length+' 件</small>'+eventCard(pending,true)+'</section>':'';
     root.querySelector('.mini-people').innerHTML=state.people.map((p,i)=>{
       const j=jobFor(state,i);
-      const quick=['meditate','farm','hill'].map((t,n)=>btn(['静修','种药','采药'][n],'quick','data-i="'+i+'" data-value="'+t+'"',jobSpec(state,t,[i]).reason)).join('');
+      const quick=['meditate','hill'].map((t,n)=>btn(['静修','采药'][n],'quick','data-i="'+i+'" data-value="'+t+'"',jobSpec(state,t,[i]).reason)).join('');
       return '<div class="row"><span><b>'+esc(p.name)+'</b><small>'+actorStatus(p,i)+'</small></span><div class="actions">'
         +(j?.repeat?btn('本轮后停','yield','data-token="'+j.id+'"'):free(state,i)?quick:'')+'</div></div>';
     }).join('');
@@ -3282,6 +3425,16 @@ function handle(e){
     return;
   }
   if(kind==='indoor-enter'){openIndoor();return;}
+  if(kind.startsWith('field-')){
+    if(activeView!=='dispatch'||indoorSelection!=='farm'||!$('indoor-window').open)return;
+    if(kind==='field-start'){sync({kind,field:selectedField,i:fieldActor,action:value,seed:fieldSeed});return;}
+    if(kind==='field-keep'){sync({kind,field:selectedField,keep:value==='keep'});return;}
+    if(kind==='field-select'){selectedField=n;showAllFieldPeople=false;fieldPersonQuery='';}
+    if(kind==='field-seed')fieldSeed=value;
+    if(kind==='field-person')fieldActor=i;
+    if(kind==='field-people'){showAllFieldPeople=!showAllFieldPeople;fieldPersonQuery='';}
+    refreshIndoor();clocks();return;
+  }
   if(kind==='indoor-exit'){
     $('indoor-window').close();showView('map');render();return;
   }
@@ -3430,6 +3583,12 @@ document.addEventListener('dblclick',event=>{
   openIndoor();
 });
 document.addEventListener('change',change);
+document.addEventListener('input',event=>{
+  if(!event.target.matches('[data-field-person-search]'))return;
+  fieldPersonQuery=event.target.value.trim();
+  for(const button of $('indoor-content').querySelectorAll('[data-kind="field-person"]'))
+    button.hidden=!state.people[Number(button.dataset.i)].name.includes(fieldPersonQuery);
+});
 function mountMini(root){
   root.innerHTML='<div class="mini-heading"><strong>青云宗</strong><div class="actions">'+btn('回主界面','jump','data-value="objective"')+btn('收起','close')+'</div></div>'
     +'<section class="hero"><canvas aria-hidden="true"></canvas></section><small class="mini-calendar"></small><div class="strip"></div>'
