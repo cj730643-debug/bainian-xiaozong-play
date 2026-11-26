@@ -408,6 +408,7 @@ const repairs = {
   plots:['扩建药圃',3,{wood:5,masonry:3},'种药位 +1'],
   furnace:['增建丹炉',4,{wood:3,masonry:6,stone:2},'炼丹位 +1']
 };
+const fortification=['加固山门',3,{wood:5,masonry:3},'围栏加固完成'];
 const ruinPrerequisites={study:'clearStudy',farm:'clearFarm',room:'clearRoom',workshop:'clearWorks',furnace:'clearWorks'};
 const oneTimeProjects=new Set(['clearStudy','clearFarm','clearRoom','clearWorks','west','east']);
 const constructionAvailable=(s,id)=>!ruinPrerequisites[id]||!!s.built[ruinPrerequisites[id]];
@@ -886,7 +887,7 @@ function jobSpec(s,type,ids,arg='',pack=0,site){
       break;
     case 'fortify':
       if(s.flags.gateFortified||current('fortify'))return fail('山门已加固或正在施工。');
-      cost={wood:5,masonry:3};break;
+      cost=fortification[2];break;
     case 'apprentice':
       if(!own(trades,arg))return fail('请选择要传授的差事。');
       if(members[1].mentor!==leader)return fail('须由弟子的师父亲自带徒。');
@@ -2660,7 +2661,7 @@ function assignmentPanel(indoor=false){
   if(selectedBuilding==='furnace'&&state.built.furnace)html+=productionMarkup(state)+'<p class="muted">丹炉使用 '+furnaceOccupied(state)+' / '+furnaceCapacity(state)+'。每增建一座，可同时多炼一炉。</p>';
   if(selectedBuilding==='study'&&state.built.study)html+='<p class="muted">静室使用 '+studyOccupied(state)+' / '+studyCapacity(state)+' 间。每建一间增加 1 个修行席位。</p>';
   if(selectedBuilding==='gate'&&state.built.room)html+='<p class="muted">常住 '+state.people.length+' / '+capacity(state)+' 人</p>';
-  if(selectedBuilding==='exit')html+='<p class="muted">'+(state.flags.gateFortified?'围栏已加固':'加固围栏 5 木材、3 石料')+' · 值守每年一次，胜获 2 灵石</p>';
+
   if(own(industries,selectedBuilding)){
     const site=industries[selectedBuilding], surveyed=own(discoveries,selectedBuilding)?state.flags['explored_'+selectedBuilding]:state.flags['survey_'+selectedBuilding], built=state.flags['industry_'+selectedBuilding];
     html+='<p class="muted">'+(built?'已整修 · ':'')+(surveyed?'每趟产出 '+(site.base+(built?site.bonus:0))+' '+resources[site.item]
@@ -2691,13 +2692,13 @@ function assignmentPanel(indoor=false){
   const lesson=['teach','winter'].includes(command.task);
   const bag=['seek','hill','patrol','rain','ape','temple','canal','outer'].includes(command.task);
   const repeat=['farm','meditate'].includes(command.task);
-  const work=type==='repair'?repairs[arg]:null;
+  const work=type==='repair'?repairs[arg]:type==='fortify'?fortification:null;
   const workName=type==='repair'&&arg==='room'&&!state.built.room&&selectedBuilding==='gate'?'修复厢房':taskLabel(assignment.task);
   const cost=spec.cost??work?.[2]??({brew:{main:1,aux:1,herbs:3},heal:{herbs:productionRecipes.heal.herbs},qi:{herbs:productionRecipes.qi.herbs}})[type];
   const summary='<section class="job-summary"><h3>'+esc(workName)+'</h3>'
-    +(work?'<p>完工后 · '+esc(work[3])+'</p>':type==='farm'?'<p>每轮收获 3 口粮及药材</p>':['brew','heal','qi'].includes(type)?'<p>完工产出 · 1 '+resources[type==='brew'?'pill':type]+'</p>':'')+'</section>';
+    +(work?'<p>完工后 · '+esc(work[3])+'</p>':type==='watch'?'<p>'+(state.seasonClaims.gateWatch===year(state)?'本年已完成':'每年一次 · 胜利可得 2 灵石')+'</p>':type==='farm'?'<p>每轮收获 3 口粮及药材</p>':['brew','heal','qi'].includes(type)?'<p>完工产出 · 1 '+resources[type==='brew'?'pill':type]+'</p>':'')+'</section>';
   return html+(choices.length>1?'<div class="task-picks">'+choices.map(id=>btn(taskLabel(id),'task','data-value="'+id+'" aria-pressed="'+(id===assignment.task)+'"')).join('')+'</div>':'')
-    +summary+materialCards(cost,spec.useReserve??(type==='brew'||type==='break'))+(selectedBuilding==='town'?'<p class="muted">执行者 · '+esc(state.people[state.townVisit?.person]?.name??'等待抵达')+'</p>':'<b class="job-label">'+(work?'施工弟子':team?'出行队伍':'执行弟子')+'</b>'+dispatchPicker(team,false,lesson?null:command))+(selectedBuilding!=='town'&&team&&assignment.partner.length?'<div class="actions">'+assignment.partner.map(i=>btn('由'+state.people[i].name+'领队','pick-leader','data-i="'+i+'"',free(state,i)?'':'弟子正忙')).join('')+'</div>':'')+'<div class="form-grid">'
+    +summary+materialCards(cost,spec.useReserve??(type==='brew'||type==='break'))+(selectedBuilding==='town'?'<p class="muted">执行者 · '+esc(state.people[state.townVisit?.person]?.name??'等待抵达')+'</p>':'<b class="job-label">'+(work?'施工弟子':type==='watch'?'值守弟子':team?'出行队伍':'执行弟子')+'</b>'+dispatchPicker(team,false,lesson?null:command))+(selectedBuilding!=='town'&&team&&assignment.partner.length?'<div class="actions">'+assignment.partner.map(i=>btn('由'+state.people[i].name+'领队','pick-leader','data-i="'+i+'"',free(state,i)?'':'弟子正忙')).join('')+'</div>':'')+'<div class="form-grid">'
     +(lesson?'<label>后辈<select data-lesson>'+option('','请选择',!assignment.partner.length)+state.people.map((p,i)=>
       String(i)===assignment.leader?'':option(i,p.name,i===assignment.partner[0])).join('')+'</select></label>':'')
     +((ambushRoutes.has(command.task)||command.task==='watch')?'<div><small>'+(ambushRoutes.has(command.task)?'野外路段可能遭伏击。':'')+'</small>'
