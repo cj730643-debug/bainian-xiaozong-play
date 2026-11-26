@@ -175,6 +175,7 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
 .job-material{display:grid;justify-items:center;align-content:start;gap:2px;padding:8px;border:1px solid #a5b49f;border-radius:8px;background:#f7f5ec}.job-material b{font-size:22px}.job-material.short{border-color:#ac5e55;background:#f8ede6}.job-material.short small:last-child{color:#8e3d34}
 .job-label{display:block;margin:10px 0 5px;font-weight:700}.job-time{font-variant-numeric:tabular-nums;color:#314f3d;font-weight:700}.job-running{padding:12px 16px}#indoor-window.compact-job{width:min(660px,calc(100% - 24px))}#indoor-window .project-form{border-top:0;padding-top:0;margin-top:0}
 .farm-count{color:var(--muted);text-align:right;margin:0 0 10px}.farm-layout{display:grid;grid-template-columns:1.25fr 1fr;gap:18px}.farm-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-content:start}.farm-tile{min-height:96px}.farm-tile strong{font-size:1.05em}.farm-tile.locked{border-style:dashed;background:#eeeae0}.farm-tile[aria-pressed=true],.farm-picks button[aria-pressed=true],.farm-details .actions button[aria-pressed=true]{outline:2px solid #42614a;background:#e1e9d8}.farm-details{border-left:1px solid var(--line);padding-left:16px;min-width:0}.farm-details h3{margin-top:0}.farm-picks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:6px 0 12px;max-height:245px;overflow:auto;padding:3px}.farm-picks button{overflow-wrap:anywhere}.farm-yield{margin:0 0 14px}.farm-yield div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}.farm-yield dd{margin:0;font-weight:700}@media(max-width:660px){.farm-layout{grid-template-columns:1fr}.farm-details{border-left:0;padding-left:0}}
+.cargo-sheet{margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:9px}.cargo-sheet>summary{font-weight:700;margin-bottom:6px}.cargo-columns{display:grid;grid-template-columns:minmax(0,1fr) 2.2em 4.25em;gap:8px;align-items:center}.cargo-columns>:nth-child(2){text-align:right}.cargo-columns>:last-child{text-align:center}.cargo-sheet>.cargo-columns:first-of-type{font-size:.84em;color:var(--muted)}.cargo-item{padding:6px 0;border-bottom:1px solid var(--line)}.cargo-item label{min-width:0;overflow-wrap:anywhere}.cargo-item input{width:100%;min-width:0;padding:4px}.cargo-totals{margin-top:8px}.cargo-totals>div{display:flex;justify-content:space-between;gap:8px}.cargo-totals p{margin:4px 0}.cargo-bags>div{padding-block:4px}
 </style>
 
 <dialog id="recruit-event" class="town-window" aria-label="招徒名册"></dialog>
@@ -2624,14 +2625,22 @@ function townApproachMarkup(){
   const spec=jobSpec(state,'visitTown',ids);
   const load=ids.length?caravanLoad(state,ids,{...marketCargo,food:(marketCargo.food??0)+4*ids.length}):null;
   return head+'<small>年度招徒 · '+esc(recruitStatus||(roster?'本年名册已保留，再到镇上即可查看和收徒':'抵达后可访徒'))+'</small>'+dispatchPicker(true)
-    +'<details data-detail="market-cargo" open><summary>商队货单</summary><p>每人预留 4 份往返口粮。</p>'
+    +'<details class="cargo-sheet" data-detail="market-cargo" open><summary>商队货单</summary>'
+    +'<div class="cargo-columns"><span>物品</span><span>可用</span><span>带上</span></div>'
     +Object.keys(itemWeights).filter(id=>own(resources,id)||own(state.gear,id)).map(id=>{
       const n=own(resources,id)?available(state,id):state.gear[id];
-      return n||marketCargo[id]?'<label>'+commodityName(id)+'（可用 '+n+'） <input type="number" min="0" max="'+n+'" value="'+(marketCargo[id]??0)+'" data-market-cargo="'+id+'"></label>':'';
-    }).join('')+'<p>'+(load?.reason??(load?'载重 '+load.weight/10+' / '+load.limit/10+' 斤':''))+'</p>'
-    +(load?.bags?'<small>'+load.bags.map(b=>esc(state.people[b.i].name)+' · '+(cargoText(b.items)||'空行囊')).join('；')+'</small>':'')
+      const name=commodityName(id);
+      return n||marketCargo[id]?'<div class="cargo-columns cargo-item"><label for="cargo-'+id+'">'+esc(name)
+        +'</label><span>'+n+'</span><input id="cargo-'+id+'" type="number" min="0" max="'+n
+        +'" value="'+(marketCargo[id]??0)+'" data-market-cargo="'+id+'" aria-label="'+esc(name+'携带数量')+'"></div>':'';
+    }).join('')
+    +'<div class="cargo-totals"><div><span>往返路粮</span><b>'+4*ids.length+' 份</b></div>'
+    +(load?.reason?'<p class="accent">'+esc(load.reason)+'</p>':load?'<div><span>队伍载重</span><b>'+load.weight/10+' / '+load.limit/10+' 斤</b></div>':'')
+    +'</div>'
+    +(load?.bags?'<details class="cargo-bags" data-detail="market-cargo-bags"><summary>分装明细</summary>'
+      +load.bags.map(b=>'<div><b>'+esc(state.people[b.i].name)+'</b><small>'+esc(cargoText(b.items)||'空行囊')+'</small></div>').join('')+'</details>':'')
     +(state.lastTradePack?btn('沿用上次货单','market-reuse'):'')+'</details>'
-    +'<p><small>'+esc(spec.reason||routeText(state,spec.route,spec.duration)+' · 往返 '+4*ids.length+' 口粮')+'</small></p>'
+    +'<p><small>'+esc(spec.reason||routeText(state,spec.route,spec.duration))+'</small></p>'
     +btn('前往石桥镇','visit-town','class="gold"',spec.reason||load?.reason);
 }
 function refreshRecruitEvent(){
