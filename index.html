@@ -188,7 +188,7 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
   <details><summary>修行、功法与筑基</summary><ol><li>在静室修到炼气圆满（修为 100）。在「功法」页选修习者，按灵根和境界学习。已学内容在「人物 → 已学功法」，悬停功法名可看效果。</li><li>药圃每照料 3 轮收 1 份筑基主药。辅药去青崖后山找，队里有神识至少 6 的人可在岩背獾事件中选绕行，也可布阵迎战。</li><li>让掌门在丹房消耗主药、辅药各 1 份及普通药材 3 份炼丹，再让任意炼气圆满的成员去静室冲关。</li></ol><div class="actions"><button type="button" data-kind="guide-go" data-value="manuals">查看宗门功法</button><button type="button" data-kind="guide-go" data-value="dispatch" data-site="furnace" data-task="brew">前往丹房</button></div></details>
   <details><summary>设置作息与休息</summary><p>进「作息」，选弟子，再选种药、修行或休息等活动，点击小时格安排。可以先用「日常模板」再改几个时段。现实 30 秒等于游戏 1 小时，安排每天重复。</p><p>给弟子留出休息时间。自由时段由弟子根据状态行动，疲劳过高会优先休息。要手动派人时，先看人物状态和按钮旁的原因。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="schedule">设置作息</button></div></details>
   <details><summary>收徒与拜师</summary><p><strong>招募新弟子</strong>　先在山门厢房增建一处厢房，再把石桥镇声望升到 1（例如完成护送商队）。派人到镇上，点「年度招徒 → 开始访徒」。3 分钟后在弹窗挑人，每人需要 3 口粮和一张空床。开局每年可收 1 人，名册全年有效。</p><p><strong>安排师承</strong>　宗门有人筑基后，打开「人物」，选炼气弟子，进「差事与师承」拜师。双方空闲时可以请教功法或学习师父精通的差事。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="dispatch" data-site="gate" data-task="repair.room">前往山门厢房</button><button type="button" data-kind="guide-go" data-value="people">查看人物</button></div></details>
-  <details><summary>战斗、仓库与小窗</summary><p>遇战斗先到「事件与战斗」查看小队。前卫优先扛伤，后援输出或施法。战斗按有效身法自动行动，首次遇敌可用神识探查。战后受伤的弟子需要休养。</p><p>「宗门仓库」可看资源、账房和预留备料。页首可以开启画中画，方便边做别的事边看差事和待办。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="warehouse">查看宗门仓库</button></div></details>
+  <details><summary>战斗、仓库与小窗</summary><p>遇战斗先到「事件与战斗」查看小队。前卫优先扛伤，后援输出或施法。战斗按有效身法自动行动，首次遇敌可用神识探查。战后受伤的弟子需要休养。</p><p>「宗门仓库」可看资源、账房和预留备料。页首可以开启画中画，方便边做别的事边看差事和待办。</p><div class="actions"><button type="button" data-kind="guide-go" data-value="dispatch" data-site="store" data-enter="true">查看宗门仓库</button></div></details>
 </dialog>
 <main id="app">
 <header><div class="brand"><span class="seal">宗</span> 百年小宗</div><button id="pip" class="gold" disabled>开启画中画</button></header>
@@ -209,8 +209,6 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
       <button type="button" data-kind="view" data-value="schedule">作息</button>
       <button type="button" data-kind="view" data-value="manuals">功法</button>
       <button type="button" data-kind="view" data-value="events">事件与战斗 <span id="event-count" class="nav-count" hidden></span></button>
-      <button type="button" data-kind="view" data-value="facilities">山门设施</button>
-      <button type="button" data-kind="view" data-value="warehouse">宗门仓库</button>
       <button type="button" data-kind="view" data-value="journal">山门纪事</button>
     </nav>
     <div>
@@ -230,8 +228,6 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
         <section id="battle" class="panel" tabindex="-1" hidden></section>
         <section id="no-events" class="panel"><h2>暂无待处理事件</h2><p>历练遭遇和山门来访会出现在这里。</p></section>
       </div>
-      <div class="view" data-view="facilities" hidden><section id="buildings" class="panel" tabindex="-1"></section></div>
-      <div class="view" data-view="warehouse" hidden><section id="warehouse" class="panel" tabindex="-1"></section></div>
       <div class="view" data-view="journal" hidden><section class="panel log"><h2>山门纪事</h2><div id="journal"></div></section></div>
     </div>
   </div>
@@ -2972,18 +2968,6 @@ function battleMarkup(){
         +'<label class="check"><input type="checkbox" data-form="heal" data-token="'+e.token+'" data-n="'+k+'" '+(f.autoHeal?'checked':'')+'> 低于 30% 自动服丹</label></div></article>';
     }).join('')+btn('开始自动战斗','battle','data-token="'+e.token+'" class="gold"',!selected.length?'请至少选一人上阵':'');
 }
-function facilities(){
-  const s=state;
-  const slots=[
-    ['厢房','已入住',s.people.length,capacity(s)],
-    ['静室','使用中',studyOccupied(s),studyCapacity(s)],
-    ['药圃','种药中',farmOccupied(s),farmCapacity(s)],
-    ['丹炉','炼丹中',furnaceOccupied(s),furnaceCapacity(s)]
-  ];
-  return '<h2>山门设施</h2><div class="strip warehouse-stock">'+slots.map(([name,label,used,total])=>
-    '<span>'+name+'<b>'+used+' / '+total+'</b>'+label+' · 空位 '+Math.max(0,total-used)+'</span>'
-  ).join('')+'</div>';
-}
 function waterContract(){
   const s=state,f=s.flags;
   let html='';
@@ -3097,8 +3081,6 @@ function render(){
   $('no-events').hidden=!!waiting||!$('battle').hidden;
   $('people').innerHTML=peopleMarkup();
   $('manual-page').innerHTML=manualsMarkup();
-  $('buildings').innerHTML=facilities();
-  $('warehouse').innerHTML=warehouse();
   refreshIndoor();
   $('journal').innerHTML=state.journal.slice(0,12).map(line=>'<p>'+esc(line)+'</p>').join('');
   for(const d of document.querySelectorAll('details[data-detail]'))d.open=expanded.has(d.dataset.detail);
@@ -3269,6 +3251,7 @@ function handle(e){
     showView(value);
     if(own(assignmentPages,value))$('assignments').innerHTML=assignmentMarkup();
     document.querySelector('[data-view="'+value+'"]')?.scrollIntoView({block:'start'});
+    if(b.dataset.enter){$('indoor-window').showModal();refreshIndoor();clocks();}
     return;
   }
   if(kind==='view'){showView(value);if(own(assignmentPages,value))$('assignments').innerHTML=assignmentMarkup();return;}
