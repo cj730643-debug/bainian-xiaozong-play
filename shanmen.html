@@ -176,6 +176,7 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
 .job-label{display:block;margin:10px 0 5px;font-weight:700}.job-time{font-variant-numeric:tabular-nums;color:#314f3d;font-weight:700}.job-running{padding:12px 16px}#indoor-window.compact-job{width:min(660px,calc(100% - 24px))}#indoor-window .project-form{border-top:0;padding-top:0;margin-top:0}
 .farm-count{color:var(--muted);text-align:right;margin:0 0 10px}.farm-layout{display:grid;grid-template-columns:1.25fr 1fr;gap:18px}.farm-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-content:start}.farm-tile{min-height:96px}.farm-tile strong{font-size:1.05em}.farm-tile.locked{border-style:dashed;background:#eeeae0}.farm-tile[aria-pressed=true],.farm-picks button[aria-pressed=true],.farm-details .actions button[aria-pressed=true]{outline:2px solid #42614a;background:#e1e9d8}.farm-details{border-left:1px solid var(--line);padding-left:16px;min-width:0}.farm-details h3{margin-top:0}.farm-picks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:6px 0 12px;max-height:245px;overflow:auto;padding:3px}.farm-picks button{overflow-wrap:anywhere}.farm-yield{margin:0 0 14px}.farm-yield div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}.farm-yield dd{margin:0;font-weight:700}@media(max-width:660px){.farm-layout{grid-template-columns:1fr}.farm-details{border-left:0;padding-left:0}}
 .cargo-sheet{margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:9px}.cargo-sheet>summary{font-weight:700;margin-bottom:6px}.cargo-columns{display:grid;grid-template-columns:minmax(0,1fr) 2.2em 4.25em;gap:8px;align-items:center}.cargo-columns>:nth-child(2){text-align:right}.cargo-columns>:last-child{text-align:center}.cargo-sheet>.cargo-columns:first-of-type{font-size:.84em;color:var(--muted)}.cargo-item{padding:6px 0;border-bottom:1px solid var(--line)}.cargo-item label{min-width:0;overflow-wrap:anywhere}.cargo-item input{width:100%;min-width:0;padding:4px}.cargo-totals{margin-top:8px}.cargo-totals>div{display:flex;justify-content:space-between;gap:8px}.cargo-totals p{margin:4px 0}.cargo-bags>div{padding-block:4px}
+.market-board h4{margin:14px 0 4px;color:#314f3d}.market-board [aria-pressed=true]{background:#dce8d9;border-color:#69816c}.market-quote{display:grid;grid-template-columns:minmax(0,1fr) minmax(4em,auto) auto;gap:12px;align-items:center;border-bottom:1px solid var(--line);padding:8px 0}.market-price{text-align:right}.market-contract{margin-top:12px}
 </style>
 
 <dialog id="recruit-event" class="town-window" aria-label="招徒名册"></dialog>
@@ -2545,20 +2546,35 @@ function supplyStatus(s){
   return '剩余 '+contract.remaining+' 季 · 下次交货 '+clock(next)+' · '
     +(missing(s,supplyTerms.cost)||'药材已备齐');
 }
+let marketTab='buy';
 function marketMarkup(){
-  const rows=(seasonal)=>Object.entries(marketOffers).filter(([,offer])=>(offer.season!==undefined)===seasonal).map(([id,offer])=>{
+  const tabs={buy:'买入',sell:'出售',season:'四季集市',contracts:'供药契约'};
+  const cargo=state.townVisit?.cargo??{};
+  const groups={};
+  for(const [id,offer] of Object.entries(marketOffers)){
+    const buy=own(offer.cost,'stone');
+    const goods=Object.keys(buy?offer.reward:offer.cost);
+    if(marketTab==='contracts'?id!=='order':marketTab==='season'?offer.season!==season(state):
+      offer.season!==undefined||id==='order'||(marketTab==='buy')!==buy||!buy&&!goods.some(key=>(cargo[key]??0)>0))continue;
+    const group=marketTab==='season'||marketTab==='contracts'?'':offer.gear?'装备':goods.some(key=>seeds.includes(key))?'种子':
+      goods.some(key=>['herbs','heal','qi',...herbsForPill].includes(key))?'药材与丹药':'物资';
+    (groups[group]??=[]).push([id,offer,buy]);
+  }
+  const rows=Object.entries(groups).map(([group,offers])=>(group?'<h4>'+group+'</h4>':'')+offers.map(([id,offer,buy])=>{
     const reason=marketReason(state,offer,id);
-    return '<div class="row"><div><b>'+offerLabel(offer)+'</b><small>'+cargoText(offer.cost)+' 换 '+cargoText(offer.reward)+ (offer.quota?' · 本季余 '+marketRemaining(state,id,offer)+' 批':'')
-      +(offer.repGain?' · 声望 +'+offer.repGain:'')+'</small>'
-      +(reason?'<small>'+esc(reason)+'</small>':'')+'</div>'
-      +btn('交易','market','data-value="'+id+'"',reason)+'</div>';
-  }).join('');
-  return '<section class="task-form"><h3>石桥坊市</h3><p class="muted">交易使用随行货物，回程口粮已留出。供药订单每年限一次。</p><p>'+(cargoText(state.townVisit?.cargo)||'行囊无货')+'</p>'
-    +rows(false)+'<p>本地不收 · 筑基材料、筑基丹、青云木剑、典籍与契据。</p></section><section class="task-form"><h3>四季集市</h3><p class="muted">当前为'+seasons[season(state)]+'季。每项交易每年可完成一次。</p>'
-    +rows(true)+'</section><section class="task-form"><h3>石桥镇供药契约</h3>'
-    +'<p>签约两季。每次换季自动交付 8 份未预留的普通药材，获得 3 灵石和 1 点声望。缺货当季无报酬。</p>'
-    +'<p>'+supplyStatus(state)+'</p>'+btn(state.supplyContract?'续签两季':'签订两季','sign-supply','',
-      state.supplyContract?.remaining?'契约履行中':'')+'</section>';
+    return '<div class="market-quote"><div><b>'+esc(cargoText(buy?offer.reward:offer.cost))+'</b>'
+      +(offer.quota?'<small>本季余 '+marketRemaining(state,id,offer)+' 批</small>':'<small>'+esc(offerLabel(offer))+'</small>')
+      +(reason?'<small>'+esc(reason)+'</small>':'')+'</div><div class="market-price"><small>'+(buy?'支付':'获得')+'</small><b>'+esc(cargoText(buy?offer.cost:offer.reward))+'</b>'
+      +(offer.repGain?'<small>声望 +'+offer.repGain+'</small>':'')+'</div>'+btn(buy?'买入':'出售','market','data-value="'+id+'"',reason)+'</div>';
+  }).join('')).join('');
+  const contract=marketTab==='contracts'?'<div class="market-contract"><h4>两季供药契约</h4>'
+    +'<p>每次换季交付 8 份未预留的普通药材，获得 3 灵石和 1 点声望。缺货当季无报酬。</p>'
+    +'<p>'+supplyStatus(state)+'</p>'+btn(state.supplyContract?'续签两季':'签订两季','sign-supply','',state.supplyContract?.remaining?'契约履行中':'')+'</div>':'';
+  return '<section class="task-form market-board"><div class="row"><h3>石桥坊市</h3><b>随行灵石 '+(cargo.stone??0)+'</b></div>'
+    +'<div class="actions" role="group" aria-label="坊市分类">'+Object.entries(tabs).map(([id,name])=>
+      btn(name,'market-tab','data-value="'+id+'" aria-pressed="'+(marketTab===id)+'"')).join('')+'</div>'
+    +'<details data-detail="market-bag"><summary>查看行囊</summary><p>'+esc(cargoText(cargo)||'行囊无货')+'</p></details>'
+    +(rows||'<p class="muted">'+(marketTab==='sell'?'行囊里暂无坊市收购的货物。':'当前暂无报价。')+'</p>')+contract+'</section>';
 }
 function recruitmentMarkup(s){
   const plan=s.annualRecruit?.year===year(s)?s.annualRecruit:null;
@@ -3524,6 +3540,11 @@ function handle(e){
   if(kind==='trade-lesson'){sync({kind:'start',task:'apprentice',arg:value,ids:[state.people[i].mentor,i]});return;}
   if(kind==='transmit-book'){sync({kind:'start',task:'transmit',arg:value,ids:[state.people[i].mentor,i]});return;}
   if(kind==='study-book'){sync({kind:'start',task:value==='stream'?'read':'manual',arg:value,ids:[i]});return;}
+  if(kind==='market-tab'&&['buy','sell','season','contracts'].includes(value)){
+    marketTab=value;render();
+    $('town-window').querySelector('[data-kind="market-tab"][aria-pressed="true"]')?.focus({preventScroll:true});
+    return;
+  }
   if(kind==='assign'){sync(assignmentCommand());return;}
   if(kind==='quick'){sync({kind:'start',task:value,ids:[i],repeat:value!=='hill'});return;}
   if(kind==='battle'){sync({kind,token,formation:structuredClone(formation[token].filter(f=>f.selected))});return;}
