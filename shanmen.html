@@ -170,6 +170,10 @@ select,input:not([type=checkbox]){background:#fffcf3;color:var(--ink);border-col
 .indoor-node small,.indoor-detail small{display:block;font-size:.78em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .indoor-node[aria-pressed=true]{outline:2px solid #9c773a;background:#e4ebd9;color:#24382e}
 .indoor-detail{margin-top:12px}
+.job-summary{background:#edf0e6;border:1px solid #b8c3ae;border-radius:10px;padding:12px 16px;margin:8px 0 14px}
+.job-summary h3,.job-summary p{margin:0}.job-materials{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,90px),1fr));gap:8px;margin:8px 0 14px}
+.job-material{display:grid;justify-items:center;align-content:start;gap:2px;padding:8px;border:1px solid #a5b49f;border-radius:8px;background:#f7f5ec}.job-material b{font-size:22px}.job-material.short{border-color:#ac5e55;background:#f8ede6}.job-material.short small:last-child{color:#8e3d34}
+.job-label{display:block;margin:10px 0 5px;font-weight:700}.job-time{font-variant-numeric:tabular-nums;color:#314f3d;font-weight:700}.job-running{padding:12px 16px}#indoor-window.compact-job{width:min(660px,calc(100% - 24px))}#indoor-window .project-form{border-top:0;padding-top:0;margin-top:0}
 </style>
 
 <dialog id="recruit-event" class="town-window" aria-label="招徒名册"></dialog>
@@ -1111,10 +1115,9 @@ function complete(s,j){
       break;
     }
     case 'meditate': {
-      const base=j.hallMeditation?Math.max(1,Math.round(cultivation(p)*0.5)):cultivation(p), qi=j.qiBonus??0;
-      let gain=qi===3?base+qi:Math.round(base*(1+qi));
-      if(!p.rank&&s.route==='borrow'&&s.flags.restored&&s.uses<5){s.uses++;gain+=2;}
-      const previous=p.points;addXp(p,Math.max(1,Math.round(gain*talentFactor(p,'focus','restless'))));
+      const gain=meditationGain(s,p,j.hallMeditation,j.qiBonus??0);
+      if(!p.rank&&s.route==='borrow'&&s.flags.restored&&s.uses<5)s.uses++;
+      const previous=p.points;addXp(p,gain);
       if(p.points>previous)log(s,p.name+'晋升至'+rankName(p)+'，获得 '+(p.points-previous)+' 点五维。');
       for(const name of Object.values(mainManuals(p)))p.mastery[name]++;
       s.studyRounds++;
@@ -1125,8 +1128,8 @@ function complete(s,j){
     }
     case 'farm':
       s.farmRounds++;s.stock.food+=3;
-      s.stock.herbs+=2+proficiency+(mastered(p,manuals.wood.name)?1:0)+(s.built.farm?1:0)+(s.ditch===2?1:0);
-      if(s.flags.seed>0&&!--s.flags.seed){s.stock.herbs+=4;log(s,'春种收成，额外入仓 4 普通药材。');}
+      s.stock.herbs+=herbYield(s,p);
+      if(s.flags.seed>0&&!--s.flags.seed)log(s,'春种收成，额外入仓 4 普通药材。');
       if(s.farmRounds%3===0){s.stock.main++;log(s,'筑基主药成熟，已入仓。');}
       if(s.farmRounds>=2)queue(s,'ditch',j.people);
       if(s.farmRounds>=4)queue(s,'moss',j.people);
@@ -2281,21 +2284,25 @@ function indoorMap(){
       +'</b><small>'+indoorStatus(id)+'</small>'+(names?'<small title="'+esc(names)+'">'+esc(names)+'</small>':'')+'</button>';
   }).join('');
   return '<h2>青云宗 · 山门内</h2><div class="indoor-scroll"><div class="indoor-grid"><svg aria-hidden="true">'+roads
-    +'</svg>'+nodes+'</div></div><div class="row indoor-detail"><div><b>'+indoorName(indoorSelection)
-    +'</b><small>'+indoorStatus(indoorSelection)+'</small></div>'+btn('进入','indoor-enter')+'</div>';
+    +'</svg>'+nodes+'</div></div><div class="row indoor-detail">'+indoorDetail()+'</div>';
+}
+function indoorDetail(){
+  return '<div><b>'+indoorName(indoorSelection)+'</b><small>'+indoorStatus(indoorSelection)+'</small></div>'+btn('进入','indoor-enter');
 }
 function refreshIndoor(){
   const dialog=$('indoor-window');
   if(!dialog.open)return;
   if(activeView==='map'){
+    dialog.classList.remove('compact-job');
     $('indoor-title').textContent=placeName(state,selectedBuilding);
     $('indoor-content').innerHTML=assignmentPanel(true);
     return;
   }
   const id=indoorSelection, project=indoorProject(id);
+  dialog.classList.toggle('compact-job',!['store','workshop','furnace'].includes(id));
   $('indoor-title').textContent=indoorName(id);
   $('indoor-content').innerHTML=id==='store'?warehouse():id==='exit'?btn('前往大地图','indoor-exit')+assignmentPanel(true)
-    :project?'<p>'+esc(repairs[project.arg][0])+' · '+esc(state.people[project.people[0]].name)+' · '+clock(project.end)+'</p>'
+    :project?'<section class="job-summary job-running"><h3>施工中</h3><p>'+esc(state.people[project.people[0]].name)+' · '+esc(repairs[project.arg][0])+'</p><p>剩余 '+clock(project.end)+'</p></section>'
     :assignmentPanel(true);
 }
 const assignmentPages={dispatch:{title:'建筑',sections:['study','farm','furnace','workshop','library','gate']},map:{title:'地图',sections:['hill','town','temple','water','field','mine','forest','quarry']}};
@@ -2523,21 +2530,53 @@ function assignmentMarkup(){
   return '<h2>宗门地图</h2><div class="map-layout"><div><div class="map-scroll"><div class="map-grid">'+mapRoads.map(roadMarkup).join('')+tiles+state.people.map((p,i)=>'<span class="map-avatar" data-map-person="'+i+'" title="'+esc(p.name)+'" aria-label="'+esc(p.name)+'">'+esc(Array.from(p.name)[0])+'</span>').join('')
     +'</div></div><p class="map-legend">虚线为道路 · ! 待处理事件</p></div><aside class="map-details">'+detail+'</aside></div>';
 }
-function dispatchPicker(team,visit=false){
+function jobTimer(ms){
+  const seconds=Math.ceil(ms/1000);
+  return String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
+}
+function materialCards(cost,useReserve=false){
+  const items=Object.entries(cost??{});
+  return items.length?'<b class="job-label">所需材料</b><div class="job-materials">'+items.map(([id,n])=>{
+    const absent=Math.max(0,n-(useReserve?state.stock[id]:available(state,id)));
+    return '<div class="job-material'+(absent?' short':'')+'"><small>'+resources[id]+'</small><b>'+n+'</b>'
+      +(absent?'<small>缺 '+absent+'</small>':'')+'</div>';
+  }).join('')+'</div>':'';
+}
+function herbYield(s,p){
+  return 2+tradeLevel(tradeCount(p,'farming'))+(mastered(p,manuals.wood.name)?1:0)
+    +(s.built.farm?1:0)+(s.ditch===2?1:0)+(s.flags.seed===1?4:0);
+}
+function meditationGain(s,p,hall,qi){
+  const base=hall?Math.max(1,Math.round(cultivation(p)*0.5)):cultivation(p);
+  const borrow=!p.rank&&s.route==='borrow'&&s.flags.restored&&s.uses<5;
+  return Math.max(1,Math.round(((qi===3?base+qi:Math.round(base*(1+qi)))+(borrow?2:0))*talentFactor(p,'focus','restless')));
+}
+function dispatchPicker(team,visit=false,task=null){
+
   const entries=state.people.map((p,i)=>({p,i,idle:free(state,i)})).sort((a,b)=>Number(b.idle)-Number(a.idle));
   return '<div class="dispatch-grid" role="group" aria-label="'+(team?'选择队伍':'选择执行者')+'">'+entries.map(({p,i,idle})=>{
     const leader=String(i)===assignment.leader, member=team&&assignment.partner.includes(i);
     const top=Object.keys(trades).reduce((best,id)=>tradeCount(p,id)>(best?tradeCount(p,best):0)?id:best,null);
-    const status=idle?'':activityStatus(p,i);
+    const type=task?.task,arg=task?.arg;
+    const specialty=task?tradeFor(type,arg):top;
+    const learns=['manual','read','learn','vine'].includes(type);
+    const spec=task&&idle?jobSpec(state,type,[i],arg,task.pack,task.site):null;
+    const personLocked=idle&&spec?.reason&&!spec.duration;
+    const bonus=type==='farm'?'本轮 '+herbYield(state,p)+' 药材'
+      :type==='meditate'?'本轮 +'+meditationGain(state,p,task.site==='hall'||!state.built.study,!p.rank&&state.autoQi&&available(state,'qi')?0.3:0)+' 修为'
+      :type==='harvest'?'负重 '+carryingLimit(p)/10+' 斤'
+      :spec?.duration?jobTimer(spec.duration*minute):'';
+    const detail=learns?'悟性 '+p.stats[1]:specialty?trades[specialty][0]+' · '+tradeRanks[tradeLevel(tradeCount(p,specialty))]:type==='meditate'?rootLabel(p):'';
+    const status=idle?(personLocked?spec.reason:''):activityStatus(p,i);
     return '<button type="button" class="dispatch-person" data-kind="pick-dispatch" data-i="'+i+'" data-value="'+(visit?'visit':team?'team':'solo')
-      +'" aria-pressed="'+(leader||member)+'"'+(idle?'':' disabled')+'>'
+      +'" aria-pressed="'+(leader||member)+'"'+(idle&&(!personLocked||team)?'':' disabled')+'>'
       +(team&&(leader||member)?'<small class="dispatch-tag">'+(leader?'领队':'同行')+'</small>':'')
-      +'<span><strong>'+esc(p.name)+'</strong><small>'+(top?trades[top][0]+' · '+tradeRanks[tradeLevel(tradeCount(p,top))]:'暂无专长')+'</small></span>'
-      +(status?'<small class="dispatch-status">'+status+'</small>':'')+'</button>';
+      +'<span><strong>'+esc(p.name)+'</strong>'+(detail?'<small>'+esc(detail)+'</small>':'')
+      +(bonus&&!personLocked?'<small class="job-time">'+esc(bonus)+'</small>':'')+'</span>'
+      +(status?'<small class="dispatch-status">'+(idle?esc(status):status)+'</small>':'')+'</button>';
   }).join('')+'</div>';
 }
 const forgeMarks={starSword:'剑',starArmor:'甲',bow:'弓',iron:'剑',heart:'符',jade:'佩'};
-const forgeMaterialMarks={starOre:'矿',wood:'木',masonry:'石',stone:'灵'};
 function forgePanel(){
   const [,id]=assignment.task.split('.');
   const recipe=forgeRecipes[id];
@@ -2545,24 +2584,15 @@ function forgePanel(){
     const idle=state.people.findIndex((_,i)=>free(state,i)&&!(state.townVisit?.people??[state.townVisit?.person]).includes(i));
     assignment.leader=idle<0?'':String(idle);
   }
-  const command=assignmentCommand(), smith=state.people[command.ids[0]];
-  const spec=jobSpec(state,'forge',command.ids,id);
-  const seconds=Math.round((smith?skilledMinutes(recipe.duration,smith,'forging'):recipe.duration)*60);
-  const duration=Math.floor(seconds/60)+' 分 '+String(seconds%60).padStart(2,'0')+' 秒';
-  const slots=Object.entries(recipe.cost).map(([item,required])=>{
-    const count=Math.min(required,available(state,item));
-    return '<div class="forge-material"><div class="forge-slot'+(count===0?' empty':'')+'" aria-hidden="true">'
-      +(count>0?(forgeMaterialMarks[item]??resources[item][0]):'')+'</div><span>'+resources[item]+'</span>'
-      +'<b class="'+(count<required?'accent':'')+'">'+count+' / '+required+'</b></div>';
-  }).join('');
+  const command=assignmentCommand(), spec=jobSpec(state,'forge',command.ids,id);
   const running=state.jobs.find(job=>job.type==='forge');
   return '<section class="forge-workbench"><div class="forge-recipes"><h3>炼器配方</h3><div class="forge-grid">'
     +Object.keys(forgeRecipes).map(key=>'<button type="button" class="forge-tile" data-kind="forge-pick" data-value="forge.'+key
       +'" aria-pressed="'+(key===id)+'"><span aria-hidden="true">'+forgeMarks[key]+'</span><b>'+gearNames[key]+'</b></button>').join('')
-    +'</div></div><div class="forge-detail"><h3>'+gearNames[id]+'</h3><p>'+esc(recipe.effect)+' · '+(smith?'预计耗时':'基础耗时')+' '+duration+'</p>'
-    +'<h4>材料</h4><div class="forge-slots">'+slots+'</div><h4>炼器弟子</h4>'+dispatchPicker(false)
+    +'</div></div><div class="forge-detail"><h3>'+gearNames[id]+'</h3><p>'+esc(recipe.effect)+'</p>'
+    +materialCards(recipe.cost)+'<b class="job-label">炼器弟子</b>'+dispatchPicker(false,false,command)
     +(running?'<p>正在打造 '+gearNames[running.arg]+' · '+clock(running.end)+'</p>':'')
-    +(spec.reason?'<p class="forge-reason">'+esc(spec.reason)+'</p>':'')+btn('开始炼器','assign','class="gold"',spec.reason)
+    +'<div class="row"><small>'+esc(spec.reason||(spec.duration?'预计耗时 '+jobTimer(spec.duration*minute):''))+'</small>'+btn('开始炼器','assign','class="gold"',spec.reason)+'</div>'
     +'<div class="actions"><label>订单数量 <input id="forge-new-quantity" type="number" min="1" max="999" value="1"></label>'
     +btn('加入订单','forge-order-add','data-mode="count" data-value="'+id+'"')
     +btn('维持库存','forge-order-add','data-mode="stock" data-value="'+id+'"')+'</div></div></section>'+forgeOrdersMarkup();
@@ -2626,17 +2656,17 @@ function assignmentPanel(indoor=false){
   const townServices=selectedBuilding==='town'?marketMarkup()+commissionsMarkup():'';
   if(selectedBuilding==='town')html+=recruitmentMarkup(state);
   if(selectedBuilding==='mist5'&&state.flags.explored_mist5)html+='<p>采掘位 '+(state.jobs.some(j=>j.arg==='mist5'&&['harvest','develop'].includes(j.type))?'使用中':'空闲')+' · '+(state.flags.industry_mist5?'已支护 · 可排班':'支护后可排班 · 勘查后可手动试采')+'</p>';
-  if(selectedBuilding==='farm')html+='<p class="muted">种药位 '+farmOccupied(state)+' / '+farmCapacity(state)+'。修缮后可反复扩建。</p>';
+  if(selectedBuilding==='farm'&&state.built.farm)html+='<p class="muted">种药位 '+farmOccupied(state)+' / '+farmCapacity(state)+'。修缮后可反复扩建。</p>';
   if(selectedBuilding==='furnace'&&state.built.furnace)html+=productionMarkup(state)+'<p class="muted">丹炉使用 '+furnaceOccupied(state)+' / '+furnaceCapacity(state)+'。每增建一座，可同时多炼一炉。</p>';
-  if(selectedBuilding==='study')html+='<p class="muted">静室使用 '+studyOccupied(state)+' / '+studyCapacity(state)+' 间。每建一间增加 1 个修行席位。</p>';
-  if(selectedBuilding==='gate')html+='<p class="muted">常住 '+state.people.length+' / '+capacity(state)+' 人</p>';
-  if(selectedBuilding==='gate')html+='<p class="muted">'+(state.flags.gateFortified?'围栏已加固':'加固围栏 5 木材、3 石料')+' · 值守每年一次，胜获 2 灵石</p>';
+  if(selectedBuilding==='study'&&state.built.study)html+='<p class="muted">静室使用 '+studyOccupied(state)+' / '+studyCapacity(state)+' 间。每建一间增加 1 个修行席位。</p>';
+  if(selectedBuilding==='gate'&&state.built.room)html+='<p class="muted">常住 '+state.people.length+' / '+capacity(state)+' 人</p>';
+  if(selectedBuilding==='exit')html+='<p class="muted">'+(state.flags.gateFortified?'围栏已加固':'加固围栏 5 木材、3 石料')+' · 值守每年一次，胜获 2 灵石</p>';
   if(own(industries,selectedBuilding)){
     const site=industries[selectedBuilding], surveyed=own(discoveries,selectedBuilding)?state.flags['explored_'+selectedBuilding]:state.flags['survey_'+selectedBuilding], built=state.flags['industry_'+selectedBuilding];
     html+='<p class="muted">'+(built?'已整修 · ':'')+(surveyed?'每趟产出 '+(site.base+(built?site.bonus:0))+' '+resources[site.item]
       +(built?(own(duties,selectedBuilding)?' · 可安排常驻管事。':''):' · 整修后产量提高。'):'先勘查，之后可派人采集。')+'</p>';
   }
-  html+='<div class="task-form"><h3>'+(own(discoveries,selectedBuilding)&&!state.flags['explored_'+selectedBuilding]?'未探索地块':placeName(state,selectedBuilding))+'</h3>';
+  html+='<div class="task-form project-form">'+(indoor?'':'<h3>'+placeName(state,selectedBuilding)+'</h3>');
   if(selectedBuilding==='farm'&&state.built.farm&&season(state)===0&&state.seasonClaims.spring!==year(state))
     html+='<div class="room-action">'+btn('春季选种 · 2 普通药材','seed','',missing(state,{herbs:2}))+'</div>';
   if(selectedBuilding==='hall')html+='<p>临时住处 · 常住 '+state.people.length+' / '+capacity(state)+' 人。'+'大厅临时打坐的修为收益为正式静修的 50%。'+'</p>';
@@ -2661,8 +2691,13 @@ function assignmentPanel(indoor=false){
   const lesson=['teach','winter'].includes(command.task);
   const bag=['seek','hill','patrol','rain','ape','temple','canal','outer'].includes(command.task);
   const repeat=['farm','meditate'].includes(command.task);
-  return html+'<div class="task-picks">'+choices.map(id=>btn(taskLabel(id),'task','data-value="'+id+'" aria-pressed="'+(id===assignment.task)+'"')).join('')
-    +'</div>'+(selectedBuilding==='town'?'<p class="muted">执行者 · '+esc(state.people[state.townVisit?.person]?.name??'等待抵达')+'</p>':dispatchPicker(team))+(selectedBuilding!=='town'&&team&&assignment.partner.length?'<div class="actions">'+assignment.partner.map(i=>btn('由'+state.people[i].name+'领队','pick-leader','data-i="'+i+'"',free(state,i)?'':'弟子正忙')).join('')+'</div>':'')+'<div class="form-grid">'
+  const work=type==='repair'?repairs[arg]:null;
+  const workName=type==='repair'&&arg==='room'&&!state.built.room&&selectedBuilding==='gate'?'修复厢房':taskLabel(assignment.task);
+  const cost=spec.cost??work?.[2]??({brew:{main:1,aux:1,herbs:3},heal:{herbs:productionRecipes.heal.herbs},qi:{herbs:productionRecipes.qi.herbs}})[type];
+  const summary='<section class="job-summary"><h3>'+esc(workName)+'</h3>'
+    +(work?'<p>完工后 · '+esc(work[3])+'</p>':type==='farm'?'<p>每轮收获 3 口粮及药材</p>':['brew','heal','qi'].includes(type)?'<p>完工产出 · 1 '+resources[type==='brew'?'pill':type]+'</p>':'')+'</section>';
+  return html+(choices.length>1?'<div class="task-picks">'+choices.map(id=>btn(taskLabel(id),'task','data-value="'+id+'" aria-pressed="'+(id===assignment.task)+'"')).join('')+'</div>':'')
+    +summary+materialCards(cost,spec.useReserve??(type==='brew'||type==='break'))+(selectedBuilding==='town'?'<p class="muted">执行者 · '+esc(state.people[state.townVisit?.person]?.name??'等待抵达')+'</p>':'<b class="job-label">'+(work?'施工弟子':team?'出行队伍':'执行弟子')+'</b>'+dispatchPicker(team,false,lesson?null:command))+(selectedBuilding!=='town'&&team&&assignment.partner.length?'<div class="actions">'+assignment.partner.map(i=>btn('由'+state.people[i].name+'领队','pick-leader','data-i="'+i+'"',free(state,i)?'':'弟子正忙')).join('')+'</div>':'')+'<div class="form-grid">'
     +(lesson?'<label>后辈<select data-lesson>'+option('','请选择',!assignment.partner.length)+state.people.map((p,i)=>
       String(i)===assignment.leader?'':option(i,p.name,i===assignment.partner[0])).join('')+'</select></label>':'')
     +((ambushRoutes.has(command.task)||command.task==='watch')?'<div><small>'+(ambushRoutes.has(command.task)?'野外路段可能遭伏击。':'')+'</small>'
@@ -2675,8 +2710,8 @@ function assignmentPanel(indoor=false){
         '<label class="check"><input type="checkbox" data-field="'+id+'" '+(assignment[id]?'checked':'')+'> '+label+'</label>').join(' ')+'</div>':'')
     +(bag?'<label>携带疗伤丹<select data-field="pack">'+[0,1,2].map(n=>option(n,n,Number(assignment.pack)===n)).join('')+'</select></label>':'')
     +(repeat?'<label class="check"><input type="checkbox" data-field="repeat" '+(assignment.repeat?'checked':'')+'> 自动重复</label>':'')
-    +'</div><div class="row"><small>'+esc('已选 '+command.ids.length+' 人 · '+(spec.reason||[routeText(state,spec.route,spec.duration),costText(spec.cost)].filter(Boolean).join(' · ')))+'</small>'
-    +btn('开始'+taskLabel(assignment.task),'assign','class="gold"',spec.reason)+'</div></div>'+townServices;
+    +'</div><div class="row"><small>'+esc((command.ids.length===1?'已选 '+state.people[command.ids[0]].name:'已选 '+command.ids.length+' 人')+' · '+(spec.reason||[spec.route?routeText(state,spec.route,spec.duration):'预计耗时 '+jobTimer(spec.duration*minute),type==='harvest'?'队伍负重 '+command.ids.reduce((sum,i)=>sum+carryingLimit(state.people[i]),0)/10+' 斤':''].filter(Boolean).join(' · ')))+'</small>'
+    +btn(workName==='修复厢房'?'开始修复':'开始'+workName,'assign','class="gold"',spec.reason)+'</div></div>'+townServices;
 }
 function actorStatus(p,i){
   const fatigue=' · 疲劳 <span data-fatigue="'+i+'">'+Math.floor(fatigueOf(p))+'</span>/100';
@@ -2889,12 +2924,12 @@ function manualsMarkup(){
       +(book.bonus?'<small>主修熟练（3） · '+book.bonus+'</small><small>主修圆满（6） · '+book.master+'</small>':'')
       +(known?'<small>'+(current?'主修 · ':'已学 · ')+(points>=6?'圆满':points>=3?'熟练':'入门')+' '+points+'/6</small>'
         +'<div class="meter"><span style="width:'+points/6*100+'%"></span></div>'
-        :'<small>'+(studying?'学习中 · '+clock(studyJob.end):esc(reason||'可学习 · '+Math.round((spec?.duration??0)*60)+' 秒'))+'</small>')
+        :'<small>'+(studying?'学习中 · '+clock(studyJob.end):esc(reason||'预计耗时 '+jobTimer((spec?.duration??0)*minute)))+'</small>')
       +(action&&!studying?'<div class="actions">'+action+'</div>':'')+'</article>';
   }).join('');
   const learned=p.known.map(id=>'<div class="rpg-art"><span class="rpg-art-icon" aria-hidden="true">'+arts[id][0]+'</span><div>'+artDescription(p,id)+'</div></div>').join('');
-  return '<div class="row"><h2>宗门功法</h2><label>修习者 <select data-manual-person>'
-    +personOptions(i)+'</select></label></div><small>'+esc(rootLabel(p))+' · '+rankName(p)+'</small>'
+  return '<div class="row"><h2>宗门功法</h2></div><b class="job-label">修习者</b><div class="dispatch-grid" role="group" aria-label="修习者">'
+    +state.people.map((person,index)=>'<button type="button" data-kind="manual-person" class="dispatch-person" data-i="'+index+'" aria-pressed="'+(i===index)+'"><strong>'+esc(person.name)+'</strong><small>悟性 '+person.stats[1]+' · '+esc(rootLabel(person))+'</small></button>').join('')+'</div><small>'+esc(rootLabel(p))+' · '+rankName(p)+'</small>'
     +'<div class="rpg-card">'+mainManualsMarkup(p)+'<small>每轮静修会积累三类当前主修功法的熟练度。</small></div>'
     +filters('用途',['全部','修炼功法','战斗功法','身法功法'],'manual-filter',manualCategory)
     +filters('属性',['全部',...elements,'通用'],'manual-element',manualElement)
@@ -3152,8 +3187,8 @@ function showView(name){
   if(name==='schedule')$('schedule-page').innerHTML=scheduleMarkup();
   if(own(assignmentPages,name)){
     const page=assignmentPages[name];
-    const target=name==='map'?mapTiles[selectedTile]:page.sections.includes(selectedBuilding)?selectedBuilding:page.sections[0];
-    if(buildingActions[target]&&target!==selectedBuilding)chooseBuilding(target);
+    const target=name==='map'?mapTiles[selectedTile]:indoorSelection;
+    if(buildingActions[target]&&target!==selectedBuilding&&!$('indoor-window').open)chooseBuilding(target);
     const container=$(name==='map'?'map-page':'building-page');
     if($('assignments').parentElement!==container)container.append($('assignments'));
   }
@@ -3232,14 +3267,13 @@ function handle(e){
     $('indoor-window').showModal();refreshIndoor();clocks();return;
   }
   if(kind==='indoor-select'){
-    indoorSelection=value;render();
-    $('assignments').querySelector('[data-kind="indoor-select"][aria-pressed="true"]')?.focus();
+    indoorSelection=value;
+    for(const node of $('assignments').querySelectorAll('[data-kind="indoor-select"]'))
+      node.setAttribute('aria-pressed',String(node===b));
+    $('assignments').querySelector('.indoor-detail').innerHTML=indoorDetail();
     return;
   }
-  if(kind==='indoor-enter'){
-    if(buildingActions[indoorSelection])chooseBuilding(indoorSelection);
-    $('indoor-window').showModal();refreshIndoor();clocks();return;
-  }
+  if(kind==='indoor-enter'){openIndoor();return;}
   if(kind==='indoor-exit'){
     $('indoor-window').close();showView('map');render();return;
   }
@@ -3305,6 +3339,12 @@ function handle(e){
   if(kind==='draft'){draft.stats[n]+=Number(b.dataset.delta);setup();return;}
   if(kind==='balance'){draft.stats=[7,7,7,6,6];setup();return;}
   if(kind==='create'){sync({kind,name:$('leader-name').value,stats:draft.stats.slice(),element:$('leader-root').value});return;}
+  if(kind==='manual-person'){
+    selectedCharacter=i;
+    $('manual-page').innerHTML=manualsMarkup();
+    $('manual-page').querySelector('[data-kind="manual-person"][aria-pressed="true"]')?.focus({preventScroll:true});
+    return;
+  }
   if(kind==='manual-filter'||kind==='manual-element'){
     if(kind==='manual-filter')manualCategory=value;
     else manualElement=value;
@@ -3366,7 +3406,21 @@ function change(e){
   if(gear)sync({kind:'gear',slot:gear,i:Number(i),value:el.value});
 }
 $('recruit-event').addEventListener('cancel',e=>{e.preventDefault();sync({kind:'defer-recruit'});});
+function openIndoor(){
+  const dialog=$('indoor-window');
+  if(activeView!=='dispatch'||dialog.open)return;
+  if(buildingActions[indoorSelection])chooseBuilding(indoorSelection);
+  dialog.showModal();
+  refreshIndoor();
+  clocks();
+}
 document.addEventListener('click',handle);
+document.addEventListener('dblclick',event=>{
+  const node=event.target.closest('#assignments [data-kind="indoor-select"]');
+  if(!node||activeView!=='dispatch')return;
+  indoorSelection=node.dataset.value;
+  openIndoor();
+});
 document.addEventListener('change',change);
 function mountMini(root){
   root.innerHTML='<div class="mini-heading"><strong>青云宗</strong><div class="actions">'+btn('回主界面','jump','data-value="objective"')+btn('收起','close')+'</div></div>'
